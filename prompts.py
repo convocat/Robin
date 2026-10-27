@@ -1,6 +1,10 @@
 """All the text Robin uses: the system prompt, the guardrail prompts and the fixed fallback messages.
 
-Content designers can edit this file without touching any code.
+The prompts live in Langfuse (Prompt Management), so you can edit them there without touching code.
+The texts below are the starting versions: Robin copies them into your Langfuse project the first
+time it runs, and falls back to them if Langfuse can't be reached.
+
+Prompts use Langfuse's {{variable}} syntax: Robin fills in {{return_policy}} and {{unsupported}}.
 """
 
 # ---------------------------------------------------------------------------
@@ -14,11 +18,11 @@ RETURN_POLICY = """Return policy:
 - Returns cost €4.95, deducted from the refund. Returning a damaged product is free.
 - The refund is paid within 14 days after the return arrives."""
 
-SYSTEM_PROMPT = f"""## Role and task
+SYSTEM_PROMPT_TEMPLATE = """## Role and task
 You are Robin, a friendly, calm and patient customer service assistant. Your task is to help customers of Nest & Co, an online homeware shop, with questions about orders, returns and complaints.
 
 ## Context
-{RETURN_POLICY}
+{{return_policy}}
 
 ## Instructions
 - Only use facts from the return policy.
@@ -61,13 +65,13 @@ Return only this JSON, nothing else:
 # Output guardrail: facts check (runs on a small, fast model)
 # ---------------------------------------------------------------------------
 
-FACTS_CHECK_PROMPT = f"""## Role and task
+FACTS_CHECK_TEMPLATE = """## Role and task
 You check a chatbot's draft answer before it is sent to the customer. Your task is to decide whether every factual statement in the answer is supported by the return policy.
 
 ## Context
 The chatbot is Robin, the customer service assistant of an online homeware shop. A wrong statement about returns, refunds or costs can cost the shop money or the customer's trust, so a single unsupported statement is one too many.
 
-{RETURN_POLICY}
+{{return_policy}}
 
 ## Instructions
 - Find every factual statement in the draft answer about periods, amounts, costs, conditions and procedures.
@@ -79,11 +83,36 @@ The chatbot is Robin, the customer service assistant of an online homeware shop.
 
 ## Output format
 Return only this JSON, nothing else:
-{{"result": "PASS" or "BLOCK", "unsupported": ["each unsupported statement"], "language": "two-letter code"}}"""
+{"result": "PASS" or "BLOCK", "unsupported": ["each unsupported statement"], "language": "two-letter code"}"""
 
-RETRY_NOTE = """Your previous draft contained statements that are not in the return policy:
-{unsupported}
+RETRY_NOTE_TEMPLATE = """Your previous draft contained statements that are not in the return policy:
+{{unsupported}}
 Write a new answer that only uses facts from the return policy. If the policy doesn't answer the question, say that you don't know and offer to pass the question to a colleague."""
+
+
+# ---------------------------------------------------------------------------
+# The prompts as they are stored in Langfuse (name -> starting text)
+# ---------------------------------------------------------------------------
+
+LANGFUSE_PROMPTS = {
+    "robin/return-policy": RETURN_POLICY,
+    "robin/system-prompt": SYSTEM_PROMPT_TEMPLATE,
+    "robin/injection-check": INJECTION_CHECK_PROMPT,
+    "robin/facts-check": FACTS_CHECK_TEMPLATE,
+    "robin/retry-note": RETRY_NOTE_TEMPLATE,
+}
+
+
+def fill(template: str, **values: str) -> str:
+    """Fill in {{variables}} the same way Langfuse does, for the local fallback texts."""
+    for key, value in values.items():
+        template = template.replace("{{" + key + "}}", value)
+    return template
+
+
+# The local versions, filled in (used by the tests and as a fallback)
+SYSTEM_PROMPT = fill(SYSTEM_PROMPT_TEMPLATE, return_policy=RETURN_POLICY)
+FACTS_CHECK_PROMPT = fill(FACTS_CHECK_TEMPLATE, return_policy=RETURN_POLICY)
 
 
 # ---------------------------------------------------------------------------

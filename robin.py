@@ -2,14 +2,14 @@
 
 Every customer message becomes ONE trace in Langfuse, with these steps inside it:
 
-    Robin – chat turn                                   (the whole turn: customer message in, answer out)
-    ├── 1. Input guardrail – bank account numbers      (no LLM: a pattern check)
-    ├── 2. Input guardrail – prompt injection           (small model)
-    │   └── Injection check (gpt-6-luna)
-    ├── 3. Robin's answer (gpt-6-sol)                   (the LLM call with the system prompt)
-    ├── 4. Output guardrail – facts check               (small model)
-    │   └── Facts check (gpt-6-luna)
-    └── (3b/4b. one retry if the facts check blocks the first answer)
+    Robin – chat turn                                    (the whole turn: customer message in, answer out)
+    ├── 1. Input guardrail – bank account numbers       (no LLM: a pattern check)
+    ├── 2. Input guardrail – prompt injection            (small model)
+    │   └── Injection check (small model)
+    ├── 3. Robin writes the answer                      (the LLM call with the system prompt)
+    ├── 4. Output guardrail – facts check                (small model)
+    │   └── Facts check (small model)
+    └── 5. and 6.: only if the facts check blocked the first answer (a rewrite, then a second check)
 
 All turns of one chat share a session ID, so the Sessions view in Langfuse shows the whole conversation.
 """
@@ -17,11 +17,13 @@ All turns of one chat share a session ID, so the Sessions view in Langfuse shows
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass, field
 
 from langfuse import get_client, propagate_attributes
+from langfuse.api import NotFoundError
 
 import prompts
 
@@ -70,6 +72,57 @@ def mask_bank_accounts(text: str) -> tuple[str, int]:
 
 
 # ---------------------------------------------------------------------------
+# Prompts from Langfuse (Prompt Management), with the texts in prompts.py as a fallback
+# ---------------------------------------------------------------------------
+
+log = logging.getLogger("robin")
+_prompts_seeded = False
+
+
+def seed_prompts() -> None:
+    """The first time Robin runs, copy any prompt that's missing in Langfuse from prompts.py.
+
+    Existing prompts are never overwritten, so edits you make in Langfuse are kept.
+    """
+    global _prompts_seeded
+    if _prompts_seeded:
+        return
+    _prompts_seeded = True
+    if not os.getenv("LANGFUSE_PUBLIC_KEY"):
+        return
+    langfuse = get_client()
+    for name, text in prompts.LANGFUSE_PROMPTS.items():
+        try:
+            langfuse.get_prompt(name, label="production", cache_ttl_seconds=0, max_retries=0, fetch_timeout_seconds=5)
+        except NotFoundError:
+            try:
+                langfuse.create_prompt(name=name, prompt=text, labels=["production"], tags=["robin"],
+                                       commit_message="Robin's starting version, from prompts.py")
+            except Exception:
+                log.exception("could not create prompt %s in Langfuse", name)
+        except Exception:
+            log.exception("could not check prompt %s in Langfuse", name)
+
+
+def _prompt(name: str):
+    """Get the 'production' version of a prompt from Langfuse, or the local text if that fails."""
+    try:
+        return get_client().get_prompt(name, label="production", fallback=prompts.LANGFUSE_PROMPTS[name],
+                                       cache_ttl_seconds=60, max_retries=1, fetch_timeout_seconds=5)
+    except Exception:
+        log.exception("could not load prompt %s; using the local text", name)
+        return None
+
+
+def _text(name: str, **values: str) -> tuple[str, object]:
+    """Return (filled-in text, prompt to link in the trace). Fallback texts are not linked."""
+    prompt = _prompt(name)
+    if prompt is None:
+        return prompts.fill(prompts.LANGFUSE_PROMPTS[name], **values), None
+    return prompt.compile(**values), (None if getattr(prompt, "is_fallback", False) else prompt)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -81,7 +134,27 @@ def _parse_json(text: str) -> dict:
     return json.loads(match.group(0))
 
 
-def _chat(client, *, name: str, model: str, messages: list[dict], effort: str | None) -> str:
+# Plain-language labels for every step, shown as metadata in Langfuse. Step names never contain
+# the model name, so the graph and saved filters stay the same when you switch models.
+STEPS = {
+    "bank": {"layer": "input guardrail", "uses_llm": "no: a pattern check in code",
+             "what_it_does": "Removes bank account numbers before the message goes anywhere.",
+             "if_it_fails": "not applicable: it's a rule, not a model"},
+    "injection": {"layer": "input guardrail", "uses_llm": "yes: the small model",
+                  "what_it_does": "Checks whether the customer tries to make Robin ignore its instructions.",
+                  "if_it_fails": "fail open: the message goes through to Robin"},
+    "answer": {"layer": "LLM call", "uses_llm": "yes: Robin's model",
+               "what_it_does": "Robin writes an answer, using the system prompt and the conversation so far."},
+    "retry": {"layer": "LLM call", "uses_llm": "yes: Robin's model",
+              "what_it_does": "Robin rewrites the answer, because the facts check found unsupported statements."},
+    "facts": {"layer": "output guardrail", "uses_llm": "yes: the small model",
+              "what_it_does": "Checks that every fact in Robin's answer is in the return policy.",
+              "if_it_fails": "fail closed: the answer is not sent"},
+}
+
+
+def _chat(client, *, name: str, model: str, messages: list[dict], effort: str | None,
+          metadata: dict | None = None, prompt=None) -> str:
     """One LLM call, recorded in Langfuse as a generation named `name`.
 
     We record it ourselves instead of using the automatic OpenAI integration, so the trace only shows
@@ -92,7 +165,7 @@ def _chat(client, *, name: str, model: str, messages: list[dict], effort: str | 
     if effort:
         kwargs["reasoning_effort"] = effort
     with get_client().start_as_current_observation(
-        as_type="generation", name=name, model=model, input=messages,
+        as_type="generation", name=name, model=model, input=messages, metadata=metadata, prompt=prompt,
         model_parameters={"reasoning_effort": effort} if effort else {},
     ) as generation:
         response = client.chat.completions.create(**kwargs)
@@ -123,6 +196,7 @@ class TurnResult:
     trace_id: str | None = None    # to attach thumbs up/down feedback later
     outcome: str = "answered"
     details: dict = field(default_factory=dict)
+    summary: dict = field(default_factory=dict)  # shown as metadata on the whole turn
 
 
 # ---------------------------------------------------------------------------
@@ -139,8 +213,14 @@ def handle_turn(
     participant: str = "anonymous",
     session_id: str = "no-session",
 ) -> TurnResult:
+    seed_prompts()
     langfuse = get_client()
     robin_model = ROBIN_MODELS.get(robin_model_label, ROBIN_MODELS["GPT-6 Sol"])
+    policy, _ = _text("robin/return-policy")
+    system_prompt, system_link = _text("robin/system-prompt", return_policy=policy)
+    injection_prompt, injection_link = _text("robin/injection-check")
+    facts_prompt, facts_link = _text("robin/facts-check", return_policy=policy)
+    checks = {"facts": (facts_prompt, facts_link)}
     effort = reasoning_effort if robin_model in REASONING_MODELS else None
 
     # Guardrail 1 runs BEFORE anything is traced, so bank account numbers never reach Langfuse or OpenAI.
@@ -168,24 +248,28 @@ def handle_turn(
             # --- 1. Input guardrail: bank account numbers --------------------------------
             with langfuse.start_as_current_observation(
                 as_type="guardrail", name="1. Input guardrail – bank account numbers",
-                input=masked_message,
+                input=masked_message, metadata=STEPS["bank"],
             ) as guard:
                 bank_result = "MASKED" if bank_accounts_found else "PASS"
-                guard.update(output={
-                    "result": bank_result,
-                    "explanation": (f"Removed {bank_accounts_found} bank account number(s) before the message was sent anywhere."
-                                    if bank_accounts_found else "No bank account numbers found."),
-                })
+                explanation = (f"Removed {bank_accounts_found} bank account number(s) before the message was sent anywhere."
+                               if bank_accounts_found else "No bank account numbers found.")
+                guard.update(output={"result": bank_result, "explanation": explanation},
+                             metadata={"result": bank_result})
+                if bank_accounts_found:
+                    guard.update(level="WARNING", status_message=explanation)
+            result.summary["step_1_bank_account_check"] = bank_result
             turn.score_trace(name="guardrail: bank account", value=bank_result, data_type="CATEGORICAL")
 
             # --- 2. Input guardrail: prompt injection --------------------------------------
             with langfuse.start_as_current_observation(
-                as_type="guardrail", name="2. Input guardrail – prompt injection", input=masked_message,
+                as_type="guardrail", name="2. Input guardrail – prompt injection",
+                input=masked_message, metadata=STEPS["injection"],
             ) as guard:
                 try:
-                    raw = _chat(client, name=f"Injection check ({GUARDRAIL_MODEL})", model=GUARDRAIL_MODEL,
-                                effort=GUARDRAIL_EFFORT,
-                                messages=[{"role": "system", "content": prompts.INJECTION_CHECK_PROMPT},
+                    raw = _chat(client, name="Injection check (small model)", model=GUARDRAIL_MODEL,
+                                effort=GUARDRAIL_EFFORT, metadata={"part_of": "2. Input guardrail – prompt injection"},
+                                prompt=injection_link,
+                                messages=[{"role": "system", "content": injection_prompt},
                                           {"role": "user", "content": masked_message}])
                     verdict = _parse_json(raw)
                     injection_result = "BLOCK" if str(verdict.get("result")).upper() == "BLOCK" else "PASS"
@@ -193,8 +277,11 @@ def handle_turn(
                     explanation = verdict.get("reason", "")
                 except Exception as error:  # fail open: an error in this check doesn't stop the customer
                     injection_result, explanation = "ERROR", f"The check failed, so the message was let through: {error}"
-                    guard.update(level="WARNING", status_message=str(error))
-                guard.update(output={"result": injection_result, "explanation": explanation})
+                guard.update(output={"result": injection_result, "explanation": explanation},
+                             metadata={"result": injection_result})
+                if injection_result != "PASS":
+                    guard.update(level="WARNING", status_message=explanation)
+            result.summary["step_2_injection_check"] = injection_result
             turn.score_trace(name="guardrail: prompt injection", value=injection_result, data_type="CATEGORICAL",
                              comment=explanation)
 
@@ -204,12 +291,12 @@ def handle_turn(
                 return _finish(turn, result, facts_result="SKIPPED")
 
             # --- 3. Robin's answer -------------------------------------------------------
-            messages = [{"role": "system", "content": prompts.SYSTEM_PROMPT},
+            messages = [{"role": "system", "content": system_prompt},
                         *_clean_history(history),
                         {"role": "user", "content": masked_message}]
             try:
-                draft = _chat(client, name=f"3. Robin's answer ({robin_model})", model=robin_model,
-                              effort=effort, messages=messages)
+                draft = _chat(client, name="3. Robin writes the answer", model=robin_model,
+                              effort=effort, messages=messages, metadata=STEPS["answer"], prompt=system_link)
             except Exception as error:
                 turn.update(level="ERROR", status_message=str(error))
                 result.answer = prompts.fallback("error", language)
@@ -217,17 +304,22 @@ def handle_turn(
                 return _finish(turn, result, facts_result="SKIPPED")
 
             # --- 4. Output guardrail: facts check (with one retry) ------------------------
-            facts_result, unsupported, language = _facts_check(client, langfuse, draft, step="4")
+            facts_result, unsupported, language = _facts_check(client, langfuse, draft, checks["facts"],
+                                                               name="4. Output guardrail – facts check")
+            result.summary["rewrite_needed"] = "no"
             if facts_result == "BLOCK":
+                result.summary["rewrite_needed"] = "yes"
+                retry_note, _ = _text("robin/retry-note",
+                                      unsupported="\n".join(f"- {item}" for item in unsupported) or "- (not specified)")
                 retry_messages = messages + [
                     {"role": "assistant", "content": draft},
-                    {"role": "system", "content": prompts.RETRY_NOTE.format(
-                        unsupported="\n".join(f"- {item}" for item in unsupported) or "- (not specified)")},
+                    {"role": "system", "content": retry_note},
                 ]
                 try:
-                    draft = _chat(client, name=f"3b. Robin's answer – retry ({robin_model})", model=robin_model,
-                                  effort=effort, messages=retry_messages)
-                    facts_result, unsupported, language = _facts_check(client, langfuse, draft, step="4b")
+                    draft = _chat(client, name="5. Robin rewrites the answer", model=robin_model,
+                                  effort=effort, messages=retry_messages, metadata=STEPS["retry"], prompt=system_link)
+                    facts_result, unsupported, language = _facts_check(
+                        client, langfuse, draft, checks["facts"], name="6. Output guardrail – facts check on the rewrite")
                 except Exception as error:
                     turn.update(level="ERROR", status_message=str(error))
                     facts_result = "ERROR"
@@ -242,15 +334,15 @@ def handle_turn(
             return _finish(turn, result, facts_result=facts_result)
 
 
-def _facts_check(client, langfuse, draft: str, step: str) -> tuple[str, list, str | None]:
+def _facts_check(client, langfuse, draft: str, facts: tuple, name: str) -> tuple[str, list, str | None]:
     """Output guardrail. Returns (PASS/BLOCK/ERROR, unsupported statements, language)."""
     with langfuse.start_as_current_observation(
-        as_type="guardrail", name=f"{step}. Output guardrail – facts check", input=draft,
+        as_type="guardrail", name=name, input=draft, metadata=STEPS["facts"],
     ) as guard:
         try:
-            raw = _chat(client, name=f"Facts check ({GUARDRAIL_MODEL})", model=GUARDRAIL_MODEL,
-                        effort=GUARDRAIL_EFFORT,
-                        messages=[{"role": "system", "content": prompts.FACTS_CHECK_PROMPT},
+            raw = _chat(client, name="Facts check (small model)", model=GUARDRAIL_MODEL,
+                        effort=GUARDRAIL_EFFORT, metadata={"part_of": name}, prompt=facts[1],
+                        messages=[{"role": "system", "content": facts[0]},
                                   {"role": "user", "content": f"Draft answer:\n{draft}"}])
             verdict = _parse_json(raw)
             result = "BLOCK" if str(verdict.get("result")).upper() == "BLOCK" else "PASS"
@@ -261,16 +353,33 @@ def _facts_check(client, langfuse, draft: str, step: str) -> tuple[str, list, st
         except Exception as error:  # fail closed: if we can't check the answer, we don't send it
             result, unsupported, language = "ERROR", [], None
             explanation = f"The check failed, so the answer was not sent: {error}"
-            guard.update(level="WARNING", status_message=str(error))
-        guard.update(output={"result": result, "unsupported": unsupported, "explanation": explanation})
+        guard.update(output={"result": result, "unsupported": unsupported, "explanation": explanation},
+                     metadata={"result": result})
+        if result != "PASS":
+            guard.update(level="WARNING", status_message=explanation)
     return result, unsupported, language
 
 
+OUTCOME_NOTES = {
+    "answered": "Robin's answer passed every guardrail and was sent.",
+    "blocked by input guardrail": "The message tried to manipulate Robin, so Robin never saw it. A fixed answer was sent.",
+    "fallback after output guardrail": "Robin's answer contained facts that aren't in the policy, twice. A fixed, honest answer was sent instead.",
+    "error": "Something went wrong while calling the model. A fixed apology was sent.",
+}
+
+
 def _finish(turn, result: TurnResult, facts_result: str) -> TurnResult:
-    """Write the final answer and the outcome onto the trace."""
+    """Write the final answer, the outcome and a summary of every step onto the turn."""
+    result.summary["step_4_facts_check"] = facts_result
+    result.summary.setdefault("rewrite_needed", "no")
+    summary = {"outcome": result.outcome, "what_happened": OUTCOME_NOTES[result.outcome], **result.summary}
     turn.score_trace(name="guardrail: facts check", value=facts_result, data_type="CATEGORICAL")
     turn.score_trace(name="outcome", value=result.outcome, data_type="CATEGORICAL")
-    turn.update(output=result.answer, metadata={"outcome": result.outcome})
+    turn.update(output=result.answer, metadata=summary)
+    if result.outcome == "error":
+        turn.update(level="ERROR")
+    elif result.outcome != "answered":
+        turn.update(level="WARNING", status_message=OUTCOME_NOTES[result.outcome])
     return result
 
 

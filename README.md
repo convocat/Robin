@@ -72,20 +72,64 @@ Open http://127.0.0.1:3000 in your browser.
 
 ## Reading a trace in Langfuse
 
-Every message a participant sends becomes **one trace**, named `Robin – chat turn`. Inside it, the steps are numbered in the order they happen:
+Every message a participant sends becomes **one trace**, named `Robin – chat turn`. Inside it, the steps are numbered in the order they happen. The step names never change, whichever model you pick, so the trace tree and the graph always look the same:
 
 ```
-Robin – chat turn                                  input: the customer's message · output: Robin's final answer
-├── 1. Input guardrail – bank account numbers      result: PASS or MASKED
-├── 2. Input guardrail – prompt injection          result: PASS, BLOCK or ERROR
-│   └── Injection check (gpt-6-luna)               the small model's verdict
-├── 3. Robin's answer (gpt-6-sol)                  the system prompt, the conversation and Robin's draft
-├── 4. Output guardrail – facts check              result: PASS, BLOCK or ERROR
-│   └── Facts check (gpt-6-luna)
-└── 3b. / 4b.                                      only when the facts check blocked the first draft
+Robin – chat turn                                      input: the customer's message · output: Robin's final answer
+├── 1. Input guardrail – bank account numbers          no LLM: a pattern check
+├── 2. Input guardrail – prompt injection               small model
+│   └── Injection check (small model)
+├── 3. Robin writes the answer                          Robin's model, with the system prompt
+├── 4. Output guardrail – facts check                   small model
+│   └── Facts check (small model)
+├── 5. Robin rewrites the answer                        only if step 4 blocked the answer
+└── 6. Output guardrail – facts check on the rewrite    only if step 4 blocked the answer
 ```
 
-Every guardrail step shows a plain-language **explanation** of its decision in its output.
+Because the trace contains guardrail and agent steps, Langfuse also draws it as a **graph**. You'll find it in the trace view.
+
+**Every step explains itself.** Click a step and look at its **metadata**:
+
+| Metadata | What it says |
+| --- | --- |
+| `layer` | Input guardrail, LLM call, or output guardrail |
+| `uses_llm` | Whether the step uses a model, and which kind ("no: a pattern check in code", "yes: the small model") |
+| `what_it_does` | One sentence about the step |
+| `if_it_fails` | Fail open or fail closed, for the guardrails |
+| `result` | PASS, BLOCK, MASKED or ERROR, for the guardrails |
+
+The guardrail outputs also carry an `explanation` in plain words, such as "Not in the return policy: a €20 voucher".
+
+**The turn itself carries a summary** in its metadata: `outcome`, `what_happened` (one sentence), `step_1_bank_account_check`, `step_2_injection_check`, `step_4_facts_check` and `rewrite_needed`.
+
+The model calls (steps 3 and 5, and the small-model checks) are **linked to their prompt** in Langfuse, with its version number. Click the prompt name to open it.
+
+## Seeing when a guardrail hits
+
+There are three ways, from quickest to most complete:
+
+1. **Warnings in the trace.** Every guardrail that blocks, masks or fails is marked as a **warning**, with the reason as its status message. So is the whole turn, when Robin didn't send its own answer. In the trace tree, these steps stand out, and in the traces table you can filter on level = WARNING to see every turn where something was caught.
+2. **Score columns.** Each turn has the scores `guardrail: bank account` (PASS or MASKED), `guardrail: prompt injection` (PASS, BLOCK or ERROR) and `guardrail: facts check` (PASS, BLOCK, ERROR or SKIPPED), plus `outcome`. Show them as columns in the traces table and filter on them, for example `guardrail: prompt injection` = BLOCK for every injection attempt.
+3. **A dashboard.** In Langfuse's dashboards, chart the count of each guardrail score by value over time. That shows how often each guardrail fires across the whole cohort.
+
+Note: `guardrail: facts check` shows the result of the last check. If the first answer was blocked and the rewrite passed, the score is PASS and the metadata says `rewrite_needed: yes`.
+
+## Prompts in Langfuse
+
+Robin's prompts live in Langfuse's **Prompt Management**, in the folder `robin/`:
+
+| Prompt | Used by | Variables |
+| --- | --- | --- |
+| `robin/system-prompt` | Step 3 and 5: Robin's answer | `{{return_policy}}` |
+| `robin/return-policy` | Filled into the system prompt and the facts check | none |
+| `robin/injection-check` | Step 2: the input guardrail | none |
+| `robin/facts-check` | Step 4 and 6: the output guardrail | `{{return_policy}}` |
+| `robin/retry-note` | Step 5: tells Robin what to fix | `{{unsupported}}` |
+
+- **The first time Robin runs, it creates these prompts in your Langfuse project** from the texts in `prompts.py`, with the label `production`. It never overwrites prompts that already exist.
+- **To change a prompt, edit it in Langfuse** and give the new version the label `production`. Robin picks it up within a minute, without a redeploy. To go back, move the `production` label to an older version.
+- **The return policy is one prompt, used in two places.** Change it once, and Robin and the facts check both use the new policy. That's the "context" layer from the course, made visible.
+- **If Langfuse can't be reached,** Robin falls back to the texts in `prompts.py`. Those model calls then have no prompt link in the trace.
 
 **What to show in the traces table.** Use the column settings to show these, and save it as a view for participants:
 
@@ -98,8 +142,6 @@ Every guardrail step shows a plain-language **explanation** of its decision in i
 | Scores | `guardrail: bank account`, `guardrail: prompt injection`, `guardrail: facts check`, `outcome`, `user feedback`, and your `eval:` scores |
 | Metadata | `robin_model`, `reasoning_effort`, `guardrail_model`, and `outcome` on the turn itself |
 | Latency / Cost | How long a turn took, and its token cost (cost only appears once Langfuse knows the model's price) |
-
-Two handy filters for the session: `outcome` is "blocked by input guardrail" (every injection attempt), and `guardrail: facts check` is BLOCK (every time Robin tried to say something that isn't in the policy).
 
 All traces are sent with the environment `course`, so they're easy to keep apart from other work in the same Langfuse project.
 
@@ -121,7 +163,7 @@ These are deliberate, so participants can find and improve them:
 
 ## Changing Robin
 
-- **Text** (system prompt, guardrail prompts, fallback messages): `prompts.py`. No code knowledge needed. You can edit it on GitHub in the browser. Vercel redeploys automatically; on Render, click **Manual Deploy**.
+- **Prompts:** edit them in Langfuse (see "Prompts in Langfuse" above). The fixed fallback messages, and the starting versions of the prompts, are in `prompts.py`.
 - **Models:** the environment variables `ROBIN_MODEL`, `COMPARE_MODEL`, `GUARDRAIL_MODEL` and `GUARDRAIL_EFFORT`, in your Render or Vercel project settings (redeploy afterwards). Check the exact model names in your OpenAI account: the defaults are `gpt-6-sol`, `gpt-4.1-mini` and `gpt-6-luna`. GPT-4.1 mini leaves the OpenAI API on January 14, 2027.
 - **The chat widget:** the source is in `widget/` (React with assistant-ui). After changing it, run `npm install` and `npm run build` inside `widget/`. That rebuilds `public/index.html`, the single page that Render and Vercel serve. `npm run build:preview` makes a version with scripted answers, for showing the design without keys.
 - **Logic and tracing:** `robin.py`.
