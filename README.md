@@ -2,6 +2,7 @@
 
 Robin is the customer service assistant of Nest & Co, an invented online homeware shop. It's built for the course *GenAI design for conversations and content*, to show today's architecture in one working bot:
 
+- **A real chatbot widget** on a demo shop page: a chat bubble bottom right, built with [assistant-ui](https://www.assistant-ui.com).
 - **System prompt:** Robin's behavior, written upfront (in `prompts.py`).
 - **Input guardrails:** bank account numbers are removed by a pattern check (no LLM), and prompt injection is caught by a small model.
 - **The LLM call:** GPT-6 Sol, with a switch to GPT-4.1 mini for comparison, and a reasoning effort setting.
@@ -9,43 +10,53 @@ Robin is the customer service assistant of Nest & Co, an invented online homewar
 - **Observability:** every message becomes a readable trace in Langfuse.
 - **Evals:** ready-made LLM-as-a-Judge prompts in `EVALUATORS.md`.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/convocat/Robin)
+Robin runs on **Render** or **Vercel**. Same code, same traces: pick one, or try both and compare.
 
-*(This button deploys the course version from `convocat/Robin`. In your own copy, change `convocat/Robin` in the link to your GitHub name and repository.)*
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/convocat/Robin) [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/clone?repository-url=https%3A%2F%2Fgithub.com%2Fconvocat%2FRobin&env=OPENAI_API_KEY%2CLANGFUSE_PUBLIC_KEY%2CLANGFUSE_SECRET_KEY%2CLANGFUSE_BASE_URL%2CCOURSE_PASSCODE&envDefaults=%7B%22LANGFUSE_BASE_URL%22%3A%20%22https%3A%2F%2Fcloud.langfuse.com%22%7D&envDescription=Your%20OpenAI%20API%20key%2C%20the%20public%20and%20secret%20key%20of%20your%20Langfuse%20project%20%28Settings%20%3E%20API%20Keys%29%2C%20the%20Langfuse%20region%20URL%2C%20and%20a%20passcode%20for%20participants.&envLink=https%3A%2F%2Fgithub.com%2Fconvocat%2FRobin%23what-you-need&project-name=robin&repository-name=robin)
+
+*(These buttons deploy the course version from `convocat/Robin`. In your own copy, change `convocat/Robin` in both links to your GitHub name and repository.)*
 
 ## What you need
 
 - An **OpenAI API key** with access to GPT-6 Sol, GPT-6 Luna and GPT-4.1 mini. Set a monthly spending limit in your OpenAI account.
 - A **Langfuse project** and its API keys (Settings > API Keys). Langfuse Cloud has a free tier.
-- A free **GitHub** account and a free **Render** account, to put Robin online.
+- A free **GitHub** account, and a free **Render** or **Vercel** account.
 
-## Put Robin online with Render
+Both buttons ask for the same values: your OpenAI key, your two Langfuse keys, the Langfuse URL (`https://cloud.langfuse.com` for the EU region) and a course passcode, a word you give participants in the session.
 
-Render runs Robin for you. The project includes a `render.yaml` file that tells Render exactly what to do, so you don't have to configure anything by hand. Robin runs in Render's EU region (Frankfurt).
+## Option 1: Render
 
-### The first time (for the course teacher)
+1. Click **Deploy to Render** and sign in (you can sign in with GitHub).
+2. Fill in the values Render asks for. The other settings are already filled in by `render.yaml`.
+3. Click **Deploy**. After a few minutes, Render shows a link like `https://robin-xxxx.onrender.com`.
 
-1. **Put the project on GitHub.** Create a new repository called `robin` on github.com, make it **public**, and upload all files from this folder, including `render.yaml`. Don't upload `.env`.
-2. **Make it a template** (optional, for students): in the repository's **Settings**, tick **Template repository**.
-3. **Fix the button:** in this README, change the repository in the "Deploy to Render" link to yours.
-4. **Click the "Deploy to Render" button** and sign in to Render (you can sign in with GitHub).
-5. **Fill in the values Render asks for:** your OpenAI key, your two Langfuse keys, and a course passcode (a word you give participants in the session). The other settings are already filled in.
-6. **Click Deploy.** After a few minutes, Render shows a link like `https://robin-xxxx.onrender.com`. That's Robin.
+Good to know:
+- **On the free plan, Robin falls asleep after 15 minutes without visitors.** The next visitor waits about a minute. Open Robin yourself a few minutes before a session, or switch to the paid **Starter** plan (about $7 a month at the time of writing) to keep it awake.
+- **Updating:** Render doesn't pick up changes on GitHub automatically. Click **Manual Deploy > Deploy latest commit**.
+- Robin runs in Render's EU region (Frankfurt).
 
-### For students who want their own Robin
+## Option 2: Vercel
 
-1. On the course's `robin` repository on GitHub, click **Use this template** to make your own copy (or download the files and upload them to a new repository).
-2. In **your** copy's README, change the GitHub name in the "Deploy to Render" link to yours.
-3. Click the button and follow steps 4 to 6 above, with your own keys.
+1. Click **Deploy with Vercel** and sign in. Vercel makes a copy of the repository in your GitHub account.
+2. Fill in the values Vercel asks for, and click **Deploy**. After a minute or two, Vercel shows a link like `https://robin-xxxx.vercel.app`.
 
-### Good to know about the free plan
+Good to know:
+- **Vercel runs Robin as functions:** every message starts the API, gets an answer, and stops. There's no sleeping server, but the first message after a quiet spell can take a few seconds longer.
+- **Vercel's free (Hobby) plan is for personal, non-commercial use only.** Vercel defines commercial use broadly, so a bot used in a paid course probably needs the Pro plan. A student's own practice copy fits the free plan. If in doubt, ask Vercel support.
+- **Updating:** every change pushed to GitHub is deployed automatically.
+- Robin's API runs in Vercel's Frankfurt region (`fra1`, set in `vercel.json`).
 
-- **Robin falls asleep after 15 minutes without visitors.** The next visitor waits about a minute while it wakes up. Before a session, open Robin yourself a few minutes early.
-- **Want Robin always awake?** In Render, change the plan to **Starter** (a paid plan, about $7 a month at the time of writing).
-- **After the course:** suspend or delete the service in Render, so nobody keeps using your OpenAI key.
-- **Changing Robin:** with the button, Render doesn't automatically pick up changes you make on GitHub later. In Render, click **Manual Deploy** to update.
+## For students who want their own Robin
 
-## Run Robin on your own computer (for demos and testing)
+1. On the course's `Robin` repository on GitHub, click **Use this template** to make your own copy.
+2. In **your** copy's README, change `convocat/Robin` in the button links to your GitHub name and repository.
+3. Click a button and follow the steps above, with your own keys.
+
+## Using Robin
+
+Open the link, and fill in the **Course settings** panel (bottom left): your first name or a nickname, the passcode, Robin's model and the reasoning effort. Then click the chat bubble (bottom right). The settings panel sits outside the chatbot on purpose, so the widget looks and works like a real customer service widget.
+
+## Run Robin on your own computer
 
 You need Python 3.11 or newer.
 
@@ -57,7 +68,7 @@ cp .env.example .env               # then fill in your keys in .env
 python app.py
 ```
 
-Open http://127.0.0.1:7860 in your browser.
+Open http://127.0.0.1:3000 in your browser.
 
 ## Reading a trace in Langfuse
 
@@ -95,9 +106,9 @@ All traces are sent with the environment `course`, so they're easy to keep apart
 ## Privacy and costs
 
 - Bank account numbers are removed **before** anything is sent to OpenAI or Langfuse. Other personal data is not. Ask participants not to type real personal details.
-- The participant's nickname is stored in Langfuse as the user. Tell participants this, as the chat window does.
-- Robin runs in the EU (Render Frankfurt), but conversations are sent to OpenAI and to Langfuse. Choose Langfuse's EU region (`https://cloud.langfuse.com`) to keep traces in the EU.
-- Each chat is limited to 40 messages (`MAX_MESSAGES_PER_CHAT`). Most messages make three model calls: two on the small Luna model and one on Robin's model. A retry after a blocked answer adds two more. A blocked injection attempt costs only one small call.
+- The participant's nickname is stored in Langfuse as the user. Tell participants this, as the course settings panel does.
+- Robin runs in the EU (Render Frankfurt, or Vercel's Frankfurt region `fra1`), but conversations are sent to OpenAI and to Langfuse. Choose Langfuse's EU region (`https://cloud.langfuse.com`) to keep traces in the EU.
+- Each chat is limited to 40 messages (`MAX_MESSAGES_PER_CHAT`). The conversation is kept in the browser, so a determined participant could get around this limit: set spending limits at OpenAI (and in Vercel, if you use it) rather than relying on it. Most messages make three model calls: two on the small Luna model and one on Robin's model. A retry after a blocked answer adds two more. A blocked injection attempt costs only one small call.
 
 ## Design choices you can discuss with participants
 
@@ -110,19 +121,23 @@ These are deliberate, so participants can find and improve them:
 
 ## Changing Robin
 
-- **Text** (system prompt, guardrail prompts, fallback messages): `prompts.py`. No code knowledge needed. On GitHub you can edit it in the browser, then click **Manual Deploy** in Render.
-- **Models:** the environment variables `ROBIN_MODEL`, `COMPARE_MODEL`, `GUARDRAIL_MODEL` and `GUARDRAIL_EFFORT`, under **Environment** in Render. Check the exact model names in your OpenAI account: the defaults are `gpt-6-sol`, `gpt-4.1-mini` and `gpt-6-luna`. GPT-4.1 mini leaves the OpenAI API on January 14, 2027.
+- **Text** (system prompt, guardrail prompts, fallback messages): `prompts.py`. No code knowledge needed. You can edit it on GitHub in the browser. Vercel redeploys automatically; on Render, click **Manual Deploy**.
+- **Models:** the environment variables `ROBIN_MODEL`, `COMPARE_MODEL`, `GUARDRAIL_MODEL` and `GUARDRAIL_EFFORT`, in your Render or Vercel project settings (redeploy afterwards). Check the exact model names in your OpenAI account: the defaults are `gpt-6-sol`, `gpt-4.1-mini` and `gpt-6-luna`. GPT-4.1 mini leaves the OpenAI API on January 14, 2027.
+- **The chat widget:** the source is in `widget/` (React with assistant-ui). After changing it, run `npm install` and `npm run build` inside `widget/`. That rebuilds `public/index.html`, the single page that Render and Vercel serve. `npm run build:preview` makes a version with scripted answers, for showing the design without keys.
 - **Logic and tracing:** `robin.py`.
 
 ## Files
 
 | File | What it does |
 | --- | --- |
-| `app.py` | The chat window (Gradio) |
+| `app.py` | Robin's API: `/api/chat` and `/api/feedback`. Also serves the chat page |
 | `robin.py` | One chat turn: guardrails, the LLM call, and the Langfuse trace |
 | `prompts.py` | All the text: system prompt, guardrail prompts, fallback messages |
+| `public/index.html` | The demo shop page with the chat widget (built from `widget/`) |
+| `widget/` | Source of the chat widget and the shop page |
 | `EVALUATORS.md` | Eval prompts to paste into Langfuse |
-| `render.yaml` | Tells Render how to run Robin (used by the "Deploy to Render" button) |
+| `render.yaml` | Tells Render how to run Robin |
+| `vercel.json` | Tells Vercel how to run Robin |
 | `requirements.txt` | Python packages |
 | `.env.example` | Template for your keys when running locally |
 | `tests/` | Offline tests with a fake model (`python -m pytest tests`) |

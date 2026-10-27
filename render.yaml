@@ -1,4 +1,5 @@
 # Render Blueprint for Robin. Used by the "Deploy to Render" button in the README.
+# Robin also runs on Vercel (see vercel.json); Vercel ignores this file.
 # Render asks for every value marked `sync: false` when you create the service.
 services:
   - type: web
