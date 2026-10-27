@@ -1,0 +1,36 @@
+# Render Blueprint for Robin. Used by the "Deploy to Render" button in the README.
+# Render asks for every value marked `sync: false` when you create the service.
+services:
+  - type: web
+    name: robin
+    runtime: python
+    plan: free            # sleeps after 15 minutes without visitors; switch to "starter" to keep it awake
+    region: frankfurt     # Render's EU region
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    autoDeployTrigger: "off"   # copies made with the button don't redeploy when the original repo changes
+    envVars:
+      - key: PYTHON_VERSION   # Langfuse needs Python 3.11 or newer
+        value: 3.13.5
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: LANGFUSE_BASE_URL
+        value: https://cloud.langfuse.com
+      - key: COURSE_PASSCODE
+        sync: false
+      - key: ROBIN_MODEL
+        value: gpt-6-sol
+      - key: COMPARE_MODEL
+        value: gpt-4.1-mini
+      - key: GUARDRAIL_MODEL
+        value: gpt-6-luna
+      - key: GUARDRAIL_EFFORT
+        value: low
+      - key: MAX_MESSAGES_PER_CHAT
+        value: "40"
+      - key: LANGFUSE_TRACING_ENVIRONMENT
+        value: course
