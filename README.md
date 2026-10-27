@@ -63,7 +63,7 @@ Under **Guardrails** in the same panel, you can switch off each guardrail separa
 What changes:
 
 - A switched-off guardrail doesn't appear in the trace tree. With all three off, the tree shows only `3. Robin writes the answer` (the step numbers stay the same, so traces are easy to compare).
-- Its score column says **OFF**, and the turn's metadata lists it under `guardrails_switched_off`.
+- It gets no score, and the turn's metadata lists it under `guardrails_switched_off`.
 - Each trace gets one of the tags `guardrails: all on`, `guardrails: some off` or `guardrails: all off`, so you can filter on them.
 - With bank account numbers off, a bank account number goes to OpenAI and Langfuse exactly as typed. Use made-up numbers only.
 
@@ -122,10 +122,10 @@ The model calls (steps 3 and 5, and the small-model checks) are **linked to thei
 There are three ways, from quickest to most complete:
 
 1. **Warnings in the trace.** Every guardrail that blocks, masks or fails is marked as a **warning**, with the reason as its status message. So is the whole turn, when Robin didn't send its own answer. In the trace tree, these steps stand out, and in the traces table you can filter on level = WARNING to see every turn where something was caught.
-2. **Score columns.** Each turn has the scores `guardrail: bank account` (PASS or MASKED), `guardrail: prompt injection` (PASS, BLOCK or ERROR) and `guardrail: facts check` (PASS, BLOCK, ERROR or SKIPPED), plus `outcome`. A guardrail switched off in the course panel shows OFF. Show them as columns in the traces table and filter on them, for example `guardrail: prompt injection` = BLOCK for every injection attempt.
+2. **Scores.** Each guardrail step has its own score: `guardrail: bank account` (PASS or MASKED), `guardrail: prompt injection` (PASS, BLOCK or ERROR) and `guardrail: facts check` (PASS, BLOCK or ERROR). Click a guardrail step and open its Scores tab to see it. The whole turn has the scores `outcome` and, after a thumbs up or down, `user feedback`. Under Evaluation > Scores you can filter all of them, for example `guardrail: prompt injection` = BLOCK for every injection attempt. A guardrail that didn't run (switched off, or skipped because the message was already blocked) has no score.
 3. **A dashboard.** In Langfuse's dashboards, chart the count of each guardrail score by value over time. That shows how often each guardrail fires across the whole cohort.
 
-Note: `guardrail: facts check` shows the result of the last check. If the first answer was blocked and the rewrite passed, the score is PASS and the metadata says `rewrite_needed: yes`.
+Note: when the facts check blocks the first answer, there are two facts check steps, each with its own score: BLOCK on step 4, and the result of the second check on step 6. The turn's metadata says `rewrite_needed: yes`.
 
 ## Prompts in Langfuse
 

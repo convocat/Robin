@@ -11,8 +11,11 @@ Every customer message becomes ONE trace in Langfuse, with these steps inside it
     │   └── Facts check (small model)
     └── 5. and 6.: only if the facts check blocked the first answer (a rewrite, then a second check)
 
+Each guardrail step carries its own score (`guardrail: ...`), so clicking a step shows its result on
+its Scores tab. The `outcome` and `user feedback` scores belong to the whole turn.
+
 Each guardrail can be switched off in the course panel. A switched-off guardrail doesn't appear in the
-tree; its score column and the turn's metadata say OFF. With all three off, Robin runs on the system
+tree and gets no score; the turn's metadata and tags say it was off. With all three off, Robin runs on the system
 prompt alone, and the trace shows only step 3.
 
 All turns of one chat share a session ID, so the Sessions view in Langfuse shows the whole conversation.
@@ -281,7 +284,6 @@ def handle_turn(
             bank_result = (_bank_account_step(langfuse, masked_message, bank_accounts_found)
                            if on["bank_account"] else "OFF")
             result.summary["step_1_bank_account_check"] = bank_result
-            turn.score_trace(name="guardrail: bank account", value=bank_result, data_type="CATEGORICAL")
 
             # --- 2. Input guardrail: prompt injection --------------------------------------
             if on["injection"]:
@@ -290,8 +292,6 @@ def handle_turn(
             else:
                 injection_result, explanation = "OFF", "Switched off in the course panel."
             result.summary["step_2_injection_check"] = injection_result
-            turn.score_trace(name="guardrail: prompt injection", value=injection_result, data_type="CATEGORICAL",
-                             comment=explanation)
 
             if injection_result == "BLOCK":
                 result.answer = prompts.fallback("injection_blocked", language)
@@ -356,6 +356,7 @@ def _bank_account_step(langfuse, masked_message: str, found: int) -> str:
         explanation = (f"Removed {found} bank account number(s) before the message was sent anywhere."
                        if found else "No bank account numbers found.")
         guard.update(output={"result": result, "explanation": explanation}, metadata={"result": result})
+        guard.score(name="guardrail: bank account", value=result, data_type="CATEGORICAL", comment=explanation)
         if found:
             guard.update(level="WARNING", status_message=explanation)
     return result
@@ -380,6 +381,7 @@ def _injection_step(client, langfuse, masked_message: str, injection_prompt: str
         except Exception as error:  # fail open: an error in this check doesn't stop the customer
             result, explanation = "ERROR", f"The check failed, so the message was let through: {error}"
         guard.update(output={"result": result, "explanation": explanation}, metadata={"result": result})
+        guard.score(name="guardrail: prompt injection", value=result, data_type="CATEGORICAL", comment=explanation)
         if result != "PASS":
             guard.update(level="WARNING", status_message=explanation)
     return result, explanation, language
@@ -406,6 +408,7 @@ def _facts_check(client, langfuse, draft: str, facts: tuple, name: str) -> tuple
             explanation = f"The check failed, so the answer was not sent: {error}"
         guard.update(output={"result": result, "unsupported": unsupported, "explanation": explanation},
                      metadata={"result": result})
+        guard.score(name="guardrail: facts check", value=result, data_type="CATEGORICAL", comment=explanation)
         if result != "PASS":
             guard.update(level="WARNING", status_message=explanation)
     return result, unsupported, language
@@ -427,7 +430,6 @@ def _finish(turn, result: TurnResult, facts_result: str) -> TurnResult:
     if result.summary.get("guardrails_switched_off", "none") != "none":
         what_happened += f" Switched off in the course panel: {result.summary['guardrails_switched_off']}."
     summary = {"outcome": result.outcome, "what_happened": what_happened, **result.summary}
-    turn.score_trace(name="guardrail: facts check", value=facts_result, data_type="CATEGORICAL")
     turn.score_trace(name="outcome", value=result.outcome, data_type="CATEGORICAL")
     turn.update(output=result.answer, metadata=summary)
     if result.outcome == "error":
