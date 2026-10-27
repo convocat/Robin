@@ -17,7 +17,7 @@ const textOf = (message) =>
 export function createRobinAdapter(getSettings) {
   return {
     async run({ messages, abortSignal }) {
-      const { name, passcode, model, effort, sessionId } = getSettings();
+      const { name, passcode, model, effort, sessionId, guardrails } = getSettings();
       const history = messages.slice(0, -1).map((m) => ({ role: m.role, content: textOf(m) }));
       const message = textOf(messages.at(-1));
 
@@ -26,7 +26,7 @@ export function createRobinAdapter(getSettings) {
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, history, name, passcode, model, effort, session_id: sessionId }),
+          body: JSON.stringify({ message, history, name, passcode, model, effort, guardrails, session_id: sessionId }),
           signal: abortSignal,
         });
         data = await response.json().catch(() => ({}));

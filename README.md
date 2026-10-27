@@ -56,6 +56,19 @@ Good to know:
 
 Open the link, and fill in the **Course settings** panel (bottom left): your first name or a nickname, the passcode, Robin's model and the reasoning effort. Then click the chat bubble (bottom right). The settings panel sits outside the chatbot on purpose, so the widget looks and works like a real customer service widget.
 
+### Switching guardrails off
+
+Under **Guardrails** in the same panel, you can switch off each guardrail separately: bank account numbers, the prompt injection check and the facts check. With all three off, Robin runs on the system prompt alone. That's useful for an exercise: send the same messages with and without guardrails, and compare the answers and the traces.
+
+What changes:
+
+- A switched-off guardrail doesn't appear in the trace tree. With all three off, the tree shows only `3. Robin writes the answer` (the step numbers stay the same, so traces are easy to compare).
+- Its score column says **OFF**, and the turn's metadata lists it under `guardrails_switched_off`.
+- Each trace gets one of the tags `guardrails: all on`, `guardrails: some off` or `guardrails: all off`, so you can filter on them.
+- With bank account numbers off, a bank account number goes to OpenAI and Langfuse exactly as typed. Use made-up numbers only.
+
+The switches are remembered in the browser. They're on by default, and anything the browser doesn't send stays on.
+
 ## Run Robin on your own computer
 
 You need Python 3.11 or newer.
@@ -109,7 +122,7 @@ The model calls (steps 3 and 5, and the small-model checks) are **linked to thei
 There are three ways, from quickest to most complete:
 
 1. **Warnings in the trace.** Every guardrail that blocks, masks or fails is marked as a **warning**, with the reason as its status message. So is the whole turn, when Robin didn't send its own answer. In the trace tree, these steps stand out, and in the traces table you can filter on level = WARNING to see every turn where something was caught.
-2. **Score columns.** Each turn has the scores `guardrail: bank account` (PASS or MASKED), `guardrail: prompt injection` (PASS, BLOCK or ERROR) and `guardrail: facts check` (PASS, BLOCK, ERROR or SKIPPED), plus `outcome`. Show them as columns in the traces table and filter on them, for example `guardrail: prompt injection` = BLOCK for every injection attempt.
+2. **Score columns.** Each turn has the scores `guardrail: bank account` (PASS or MASKED), `guardrail: prompt injection` (PASS, BLOCK or ERROR) and `guardrail: facts check` (PASS, BLOCK, ERROR or SKIPPED), plus `outcome`. A guardrail switched off in the course panel shows OFF. Show them as columns in the traces table and filter on them, for example `guardrail: prompt injection` = BLOCK for every injection attempt.
 3. **A dashboard.** In Langfuse's dashboards, chart the count of each guardrail score by value over time. That shows how often each guardrail fires across the whole cohort.
 
 Note: `guardrail: facts check` shows the result of the last check. If the first answer was blocked and the rewrite passed, the score is PASS and the metadata says `rewrite_needed: yes`.

@@ -61,6 +61,7 @@ def chat():
             reasoning_effort=str(data.get("effort") or "medium"),
             participant=name,
             session_id=str(data.get("session_id") or "no-session")[:100],
+            guardrails=data.get("guardrails"),  # e.g. {"facts": false}; anything missing stays on
         )
         return jsonify({
             "answer": result.answer,

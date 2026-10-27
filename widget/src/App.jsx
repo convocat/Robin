@@ -4,6 +4,22 @@ import RobinWidget, { MOCK } from "./RobinWidget.jsx";
 const MODELS = ["GPT-6 Sol", "GPT-4.1 mini"];
 const EFFORTS = ["none", "low", "medium", "high"];
 
+// The guardrails you can switch off, to see what Robin does with the system prompt alone.
+const GUARDRAILS = [
+  { key: "bank_account", label: "Bank account numbers", off: "Your message goes to the model and Langfuse as typed." },
+  { key: "injection", label: "Prompt injection check", off: "Attempts to override Robin's instructions reach Robin." },
+  { key: "facts", label: "Facts check", off: "Robin's answer is sent without checking it against the policy." },
+];
+const ALL_ON = { bank_account: true, injection: true, facts: true };
+
+function loadGuardrails() {
+  try {
+    return { ...ALL_ON, ...JSON.parse(load("guardrails", "{}")) };
+  } catch {
+    return ALL_ON;
+  }
+}
+
 function load(key, fallback) {
   try {
     return localStorage.getItem(`robin.${key}`) ?? fallback;
@@ -26,6 +42,15 @@ function CoursePanel({ settings, setSettings }) {
     if (key !== "passcode") save(key, value);
     setSettings((current) => ({ ...current, [key]: value }));
   };
+  const toggleGuardrail = (key) => (event) => {
+    const checked = event.target.checked;
+    setSettings((current) => {
+      const guardrails = { ...current.guardrails, [key]: checked };
+      save("guardrails", JSON.stringify(guardrails));
+      return { ...current, guardrails };
+    });
+  };
+  const allOff = GUARDRAILS.every((g) => !settings.guardrails[g.key]);
   return (
     <aside className={`course ${expanded ? "" : "course--collapsed"}`} aria-label="Course settings">
       <button type="button" className="course__toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
@@ -62,6 +87,23 @@ function CoursePanel({ settings, setSettings }) {
               </select>
             </label>
           </div>
+          <fieldset className="course__guards">
+            <legend>Guardrails</legend>
+            {GUARDRAILS.map((g) => (
+              <label key={g.key} className="course__check">
+                <input type="checkbox" checked={settings.guardrails[g.key]} onChange={toggleGuardrail(g.key)} />
+                <span>
+                  {g.label}
+                  {!settings.guardrails[g.key] && <small>Off: {g.off}</small>}
+                </span>
+              </label>
+            ))}
+            <p className="course__hint">
+              {allOff
+                ? "All off: Robin runs on the system prompt alone."
+                : "Switch them off to compare traces with and without guardrails."}
+            </p>
+          </fieldset>
           {MOCK && <p className="course__mock">Preview: Robin's answers are scripted, and these settings have no effect yet.</p>}
         </div>
       )}
@@ -116,6 +158,7 @@ export default function App() {
     passcode: "",
     model: load("model", "GPT-6 Sol"),
     effort: load("effort", "medium"),
+    guardrails: loadGuardrails(),
   }));
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [open, setOpen] = useState(false);

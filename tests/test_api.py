@@ -70,3 +70,9 @@ def test_feedback_flushes(client):
 def test_index_serves_the_widget(client):
     response = client.get("/")
     assert response.status_code == 200 and b"Nest" in response.data
+
+
+def test_guardrail_switches_reach_robin(client):
+    data = chat(client, message="Refund to NL91 ABNA 0417 1643 00",
+                guardrails={"bank_account": False, "injection": False, "facts": False}).get_json()
+    assert "0417" in data["customer_message"] and data["outcome"] == "answered"

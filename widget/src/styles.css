@@ -326,7 +326,7 @@ a { color: inherit; }
   color: var(--fir);
   cursor: pointer;
 }
-.course__body { display: flex; flex-direction: column; gap: 10px; padding: 0 14px 14px; }
+.course__body { display: flex; flex-direction: column; gap: 10px; padding: 0 14px 14px; max-height: calc(100dvh - 150px); overflow-y: auto; }
 .course label { display: flex; flex-direction: column; gap: 4px; color: var(--ink); font-weight: 700; font-size: 13px; }
 .course small { font-weight: 400; color: var(--muted); font-size: 12px; }
 .course input, .course select {
@@ -342,6 +342,13 @@ a { color: inherit; }
 }
 .course__row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .course__mock { margin: 0; font-size: 12px; color: var(--muted); }
+.course__guards { border: 0; border-top: 1px solid var(--line); margin: 2px 0 0; padding: 10px 0 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.course__guards legend { font-weight: 700; font-size: 13px; color: var(--ink); padding: 0; }
+.course .course__check { flex-direction: row; align-items: flex-start; gap: 8px; font-weight: 400; font-size: 13px; cursor: pointer; }
+.course__check input { width: 16px; height: 16px; margin: 2px 0 0; padding: 0; accent-color: var(--fir); flex: none; }
+.course__check span { display: flex; flex-direction: column; gap: 2px; }
+.course__check small { color: var(--clay-ink, #8a3b1f); }
+.course__hint { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
 .guard-note { display: flex; gap: 6px; align-items: center; margin: 0; font-size: 12px; color: var(--fir); background: var(--fog); border-radius: 8px; padding: 5px 8px; }
 .guard-note svg { width: 14px; height: 14px; flex: none; }
 @media (max-width: 860px) {
