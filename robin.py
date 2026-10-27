@@ -210,6 +210,7 @@ def _clean_history(history: list[dict]) -> list[dict]:
 class TurnResult:
     answer: str                    # what Robin says to the customer
     customer_message: str          # the customer's message as stored (bank account numbers masked)
+    masked: bool = False           # True only if a bank account number was removed from THIS message
     trace_id: str | None = None    # to attach thumbs up/down feedback later
     outcome: str = "answered"
     details: dict = field(default_factory=dict)
@@ -246,6 +247,10 @@ def handle_turn(
     # Guardrail 1 runs BEFORE anything is traced, so bank account numbers never reach Langfuse or OpenAI.
     # Switched off, the message goes to OpenAI and Langfuse exactly as typed.
     masked_message, bank_accounts_found = mask_bank_accounts(message) if on["bank_account"] else (message, 0)
+    # The browser sends the earlier messages as typed, so mask those too before anything sees them.
+    history = _clean_history(history)
+    if on["bank_account"]:
+        history = [{**item, "content": mask_bank_accounts(item["content"])[0]} for item in history]
     guardrail_tag = ("guardrails: all on" if not switched_off
                      else "guardrails: all off" if len(switched_off) == len(GUARDRAILS)
                      else "guardrails: some off")
@@ -266,7 +271,7 @@ def handle_turn(
         with langfuse.start_as_current_observation(
             as_type="agent", name="Robin – chat turn", input=masked_message
         ) as turn:
-            result = TurnResult(answer="", customer_message=masked_message,
+            result = TurnResult(answer="", customer_message=masked_message, masked=bank_accounts_found > 0,
                                 trace_id=langfuse.get_current_trace_id())
             language = None
 

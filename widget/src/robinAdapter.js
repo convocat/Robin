@@ -43,7 +43,7 @@ export function createRobinAdapter(getSettings) {
         metadata: {
           custom: {
             traceId: data.trace_id,
-            masked: data.customer_message !== message,
+            masked: data.masked === true, // the server says whether it removed a bank account number
           },
         },
       };

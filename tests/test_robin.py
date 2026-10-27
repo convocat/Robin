@@ -131,3 +131,15 @@ def test_one_guardrail_off_keeps_the_others():
 def test_missing_or_odd_switches_mean_on():
     assert robin.guardrail_switches(None) == {"bank_account": True, "injection": True, "facts": True}
     assert robin.guardrail_switches({"facts": "false", "injection": False})["facts"] is True
+
+
+def test_history_is_masked_too_and_masked_flag_is_per_message():
+    client = FakeClient()
+    history = [{"role": "user", "content": "Refund to NL91ABNA0417164300"},
+               {"role": "assistant", "content": "What's your order number?"}]
+    result = robin.handle_turn("It's 12345", history, client=client)
+    assert result.masked is False  # nothing removed from this message
+    assert all("0417164300" not in json.dumps(call["messages"]) for call in client.calls)
+    assert robin.handle_turn("NL91ABNA0417164300", [], client=FakeClient()).masked is True
+    off = robin.handle_turn("NL91ABNA0417164300", [], client=FakeClient(), guardrails={"bank_account": False})
+    assert off.masked is False

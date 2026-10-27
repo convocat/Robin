@@ -66,6 +66,7 @@ def chat():
         return jsonify({
             "answer": result.answer,
             "customer_message": result.customer_message,
+            "masked": result.masked,
             "trace_id": result.trace_id,
             "outcome": result.outcome,
         })
