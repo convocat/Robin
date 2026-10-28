@@ -116,10 +116,11 @@ Because the trace contains guardrail and agent steps, Langfuse also draws it as 
 | `what_it_does` | One sentence about the step |
 | `if_it_fails` | Fail open or fail closed, for the guardrails |
 | `result` | PASS, BLOCK, MASKED or ERROR, for the guardrails |
+| `explanation` | Why, in plain words, for the guardrails, such as "Not in the return policy: a €20 voucher" |
 
-The guardrail outputs also carry an `explanation` in plain words, such as "Not in the return policy: a €20 voucher".
+**A guardrail step's output is just its result:** PASS, BLOCK, MASKED or ERROR. So in a table of steps, the Output column shows at a glance which guardrail fired. The small-model call inside it (`Injection check (small model)`, `Facts check (small model)`) shows what the model actually answered.
 
-**The turn itself carries a summary** in its metadata: `outcome`, `what_happened` (one sentence), `step_1_bank_account_check`, `step_2_injection_check`, `step_4_facts_check` and `rewrite_needed`.
+**The turn itself carries a summary** in its metadata, starting with `outcome` and `what_happened` (one sentence), then `step_1_bank_account_check`, `step_2_injection_check`, `step_4_facts_check`, `rewrite_needed`, `guardrails_switched_off`, and the settings: `robin_model`, `reasoning_effort` and `guardrail_model`. These sit on the turn only, not on every step.
 
 The model calls (steps 3 and 5, and the small-model checks) are **linked to their prompt** in Langfuse, with its version number. Click the prompt name to open it.
 
@@ -150,7 +151,7 @@ Robin's prompts live in Langfuse's **Prompt Management**, in the folder `robin/`
 - **The return policy is one prompt, used in two places.** Change it once, and Robin and the facts check both use the new policy. That's the "context" layer from the course, made visible.
 - **If Langfuse can't be reached,** Robin falls back to the texts in `prompts.py`. Those model calls then have no prompt link in the trace.
 
-**What to show in the traces table.** Use the column settings to show these, and save it as a view for participants:
+**What to show in the traces table.** For one row per chat turn, filter on **Is Root Observation = true** (Langfuse often sets this filter for you). Without it, the table lists every step as its own row. Use the column settings to show these, and save it as a view for participants:
 
 | Column | What it shows |
 | --- | --- |
@@ -158,8 +159,8 @@ Robin's prompts live in Langfuse's **Prompt Management**, in the folder `robin/`
 | User | The name or nickname the participant typed, so everyone can find their own chats |
 | Session | One ID per chat window. Open the **Sessions** view to read a whole conversation |
 | Tags | `robin` and the model, such as `model: gpt-6-sol`. Filter on this to compare models |
-| Scores | `guardrail: bank account`, `guardrail: prompt injection`, `guardrail: facts check`, `outcome`, `user feedback`, and your `eval:` scores |
-| Metadata | `robin_model`, `reasoning_effort`, `guardrail_model`, and `outcome` on the turn itself |
+| Scores | `outcome` and `user feedback` on the turn; each `guardrail:` score on its own guardrail step; your `eval:` scores |
+| Metadata | On the turn: `outcome` first, then the step results and settings. On a guardrail step: `result` first |
 | Latency / Cost | How long a turn took, and its token cost (cost only appears once Langfuse knows the model's price) |
 
 All traces are sent with the environment `course`, so they're easy to keep apart from other work in the same Langfuse project.

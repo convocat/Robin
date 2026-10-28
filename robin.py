@@ -264,12 +264,8 @@ def handle_turn(
         user_id=participant or "anonymous",
         tags=["robin", f"model: {robin_model}", guardrail_tag],
         version=APP_VERSION,
-        metadata={
-            "robin_model": robin_model,
-            "reasoning_effort": effort or "not used",
-            "guardrail_model": GUARDRAIL_MODEL,
-            "guardrails_switched_off": ", ".join(switched_off) or "none",
-        },
+        # No trace-wide metadata here: Langfuse would copy it onto every step and clutter the
+        # Metadata column. The settings go on the turn itself instead (see _finish).
     ):
         with langfuse.start_as_current_observation(
             as_type="agent", name="Robin – chat turn", input=masked_message
@@ -279,6 +275,11 @@ def handle_turn(
             language = None
 
             result.summary["guardrails_switched_off"] = ", ".join(switched_off) or "none"
+            result.details["settings"] = {
+                "robin_model": robin_model,
+                "reasoning_effort": effort or "not used",
+                "guardrail_model": GUARDRAIL_MODEL,
+            }
 
             # --- 1. Input guardrail: bank account numbers --------------------------------
             bank_result = (_bank_account_step(langfuse, masked_message, bank_accounts_found)
@@ -350,12 +351,12 @@ def _bank_account_step(langfuse, masked_message: str, found: int) -> str:
     """Input guardrail 1, shown in the trace. The masking itself already happened before tracing."""
     with langfuse.start_as_current_observation(
         as_type="guardrail", name="1. Input guardrail – bank account numbers",
-        input=masked_message, metadata=STEPS["bank"],
+        input=masked_message,
     ) as guard:
         result = "MASKED" if found else "PASS"
         explanation = (f"Removed {found} bank account number(s) before the message was sent anywhere."
                        if found else "No bank account numbers found.")
-        guard.update(output={"result": result, "explanation": explanation}, metadata={"result": result})
+        guard.update(output=result, metadata={"result": result, "explanation": explanation, **STEPS["bank"]})
         guard.score(name="guardrail: bank account", value=result, data_type="CATEGORICAL", comment=explanation)
         if found:
             guard.update(level="WARNING", status_message=explanation)
@@ -367,7 +368,7 @@ def _injection_step(client, langfuse, masked_message: str, injection_prompt: str
     name = "2. Input guardrail – prompt injection"
     language = None
     with langfuse.start_as_current_observation(
-        as_type="guardrail", name=name, input=masked_message, metadata=STEPS["injection"],
+        as_type="guardrail", name=name, input=masked_message,
     ) as guard:
         try:
             raw = _chat(client, name="Injection check (small model)", model=GUARDRAIL_MODEL,
@@ -380,7 +381,7 @@ def _injection_step(client, langfuse, masked_message: str, injection_prompt: str
             explanation = verdict.get("reason", "")
         except Exception as error:  # fail open: an error in this check doesn't stop the customer
             result, explanation = "ERROR", f"The check failed, so the message was let through: {error}"
-        guard.update(output={"result": result, "explanation": explanation}, metadata={"result": result})
+        guard.update(output=result, metadata={"result": result, "explanation": explanation, **STEPS["injection"]})
         guard.score(name="guardrail: prompt injection", value=result, data_type="CATEGORICAL", comment=explanation)
         if result != "PASS":
             guard.update(level="WARNING", status_message=explanation)
@@ -390,7 +391,7 @@ def _injection_step(client, langfuse, masked_message: str, injection_prompt: str
 def _facts_check(client, langfuse, draft: str, facts: tuple, name: str) -> tuple[str, list, str | None]:
     """Output guardrail. Returns (PASS/BLOCK/ERROR, unsupported statements, language)."""
     with langfuse.start_as_current_observation(
-        as_type="guardrail", name=name, input=draft, metadata=STEPS["facts"],
+        as_type="guardrail", name=name, input=draft,
     ) as guard:
         try:
             raw = _chat(client, name="Facts check (small model)", model=GUARDRAIL_MODEL,
@@ -406,8 +407,8 @@ def _facts_check(client, langfuse, draft: str, facts: tuple, name: str) -> tuple
         except Exception as error:  # fail closed: if we can't check the answer, we don't send it
             result, unsupported, language = "ERROR", [], None
             explanation = f"The check failed, so the answer was not sent: {error}"
-        guard.update(output={"result": result, "unsupported": unsupported, "explanation": explanation},
-                     metadata={"result": result})
+        guard.update(output=result, metadata={"result": result, "explanation": explanation,
+                                              "unsupported": "; ".join(unsupported) or "none", **STEPS["facts"]})
         guard.score(name="guardrail: facts check", value=result, data_type="CATEGORICAL", comment=explanation)
         if result != "PASS":
             guard.update(level="WARNING", status_message=explanation)
@@ -429,7 +430,8 @@ def _finish(turn, result: TurnResult, facts_result: str) -> TurnResult:
     what_happened = OUTCOME_NOTES[result.outcome]
     if result.summary.get("guardrails_switched_off", "none") != "none":
         what_happened += f" Switched off in the course panel: {result.summary['guardrails_switched_off']}."
-    summary = {"outcome": result.outcome, "what_happened": what_happened, **result.summary}
+    summary = {"outcome": result.outcome, "what_happened": what_happened, **result.summary,
+               **result.details.get("settings", {})}
     turn.score_trace(name="outcome", value=result.outcome, data_type="CATEGORICAL")
     turn.update(output=result.answer, metadata=summary)
     if result.outcome == "error":
