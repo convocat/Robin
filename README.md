@@ -48,13 +48,19 @@ Good to know:
 
 ## For students who want their own Robin
 
-1. On the course's `Robin` repository on GitHub, click **Use this template** to make your own copy.
+**To run your own Robin on Render, you don't need a copy of the code.** Click **Deploy to Render** at the top of this page, sign in, and fill in your own keys and passcode. Render builds Robin straight from this public repository. Robin's prompts live in your own Langfuse project, so you can still change them.
+
+**To change the code as well**, make your own copy first:
+
+1. On GitHub, click **Fork** at the top of this repository.
 2. In **your** copy's README, change `convocat/Robin` in the button links to your GitHub name and repository.
 3. Click a button and follow the steps above, with your own keys.
 
+The Vercel button always makes a copy in your own GitHub account.
+
 ## Using Robin
 
-Open the link, and fill in the **Course settings** panel (bottom left): your first name or a nickname, the passcode, Robin's model and the reasoning effort. Then click the chat bubble (bottom right). The settings panel sits outside the chatbot on purpose, so the widget looks and works like a real customer service widget.
+Open the link, click **Course settings** (bottom left) to open the panel, and fill in your first name or a nickname, the passcode, Robin's model and the reasoning effort. Then click the chat bubble (bottom right). The settings panel sits outside the chatbot on purpose, so the widget looks and works like a real customer service widget.
 
 ### Switching guardrails off
 
@@ -67,7 +73,7 @@ What changes:
 - Each trace gets one of the tags `guardrails: all on`, `guardrails: some off` or `guardrails: all off`, so you can filter on them.
 - With bank account numbers off, a bank account number goes to OpenAI and Langfuse exactly as typed. Use made-up numbers only.
 
-The switches are remembered in the browser. They're on by default, and anything the browser doesn't send stays on.
+**On a first visit, all three guardrails are off**, so participants first see Robin with the system prompt alone, and then switch guardrails on. The browser remembers each person's switches after that. (The API itself treats any guardrail the browser doesn't mention as on.)
 
 ## Run Robin on your own computer
 

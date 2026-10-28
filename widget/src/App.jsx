@@ -10,13 +10,14 @@ const GUARDRAILS = [
   { key: "injection", label: "Prompt injection check", off: "Attempts to override Robin's instructions reach Robin." },
   { key: "facts", label: "Facts check", off: "Robin's answer is sent without checking it against the policy." },
 ];
-const ALL_ON = { bank_account: true, injection: true, facts: true };
+// Off by default, so participants first see Robin with the system prompt alone, then switch guardrails on.
+const DEFAULT_GUARDRAILS = { bank_account: false, injection: false, facts: false };
 
 function loadGuardrails() {
   try {
-    return { ...ALL_ON, ...JSON.parse(load("guardrails", "{}")) };
+    return { ...DEFAULT_GUARDRAILS, ...JSON.parse(load("guardrails", "{}")) };
   } catch {
-    return ALL_ON;
+    return DEFAULT_GUARDRAILS;
   }
 }
 
@@ -36,7 +37,7 @@ function save(key, value) {
 }
 
 function CoursePanel({ settings, setSettings }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false); // collapsed until someone opens it
   const update = (key) => (event) => {
     const value = event.target.value;
     if (key !== "passcode") save(key, value);
@@ -101,7 +102,7 @@ function CoursePanel({ settings, setSettings }) {
             <p className="course__hint">
               {allOff
                 ? "All off: Robin runs on the system prompt alone."
-                : "Switch them off to compare traces with and without guardrails."}
+                : "Switch guardrails on and off to compare the answers and the traces."}
             </p>
           </fieldset>
           {MOCK && <p className="course__mock">Preview: Robin's answers are scripted, and these settings have no effect yet.</p>}

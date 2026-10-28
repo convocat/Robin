@@ -2,8 +2,8 @@
 // every request sends the history, and the API returns Robin's answer plus the Langfuse trace ID.
 
 const ERRORS = {
-  passcode: "Please enter the course passcode in the course panel first.",
-  name: "Please enter your first name or a nickname in the course panel first.",
+  passcode: "Please open Course settings (bottom left) and enter the course passcode first.",
+  name: "Please open Course settings (bottom left) and enter your first name or a nickname first.",
   limit: "This chat has reached its message limit. Start a new conversation to continue.",
   generic: "Sorry, something went wrong on my side. Could you try again in a moment?",
 };
