@@ -203,3 +203,4 @@ These are deliberate, so participants can find and improve them:
 | `requirements.txt` | Python packages |
 | `.env.example` | Template for your keys when running locally |
 | `tests/` | Offline tests with a fake model (`python -m pytest tests`) |
+| `tests/bank_account_cases.csv` | The bank account test set: 17 messages that must be masked, must stay, or are known gaps. Paste them into Robin, or run them with `python -m pytest tests/test_bank_accounts.py` |

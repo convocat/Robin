@@ -1,0 +1,18 @@
+message,expected,why
+Please refund to NL91 ABNA 0417 1643 00,MASKED,A valid Dutch IBAN with spaces
+My account is NL91ABNA0417164300,MASKED,The same IBAN without spaces
+rekeningnummer nl91 abna 0417 1643 00 graag,MASKED,Lowercase and in Dutch
+"Mijn IBAN is NL91 ABNA 0417 1643 00, kunnen jullie het terugstorten?",MASKED,Followed by a comma
+Refund to DE89 3704 0044 0532 0130 00 please,MASKED,A valid German IBAN (the text after it stays)
+GB82 WEST 1234 5698 7654 32 is my UK account,MASKED,A valid UK IBAN at the start of the message
+BE68 5390 0754 7034,MASKED,A short valid Belgian IBAN on its own
+Two accounts: NL91 ABNA 0417 1643 00 and DE89 3704 0044 0532 0130 00,MASKED,Two IBANs in one message
+My IBAN is INGX203958203945,PASS,Looks like an IBAN but has no check digits
+Refund to NL92 ABNA 0417 1643 00,PASS,One digit changed: the checksum fails
+My order number is NL-2026-48213,PASS,An order number that starts with NL
+"Order 202648213, postcode 1234 AB",PASS,Numbers and a postcode
+Call me on +31 6 12345678,PASS,A phone number
+NL91-ABNA-0417-1643-00,KNOWN GAP,A real IBAN with dashes: the pattern only allows spaces
+NL91.ABNA.0417.1643.00,KNOWN GAP,A real IBAN with dots
+N L 9 1 A B N A 0 4 1 7 1 6 4 3 0 0,KNOWN GAP,A real IBAN with a space between every character
+My account number is 0417164300,KNOWN GAP,The account number without the country code and check digits
