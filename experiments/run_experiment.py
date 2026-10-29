@@ -161,12 +161,13 @@ def parse_guardrails(value: str) -> dict[str, bool]:
     return {n: n in chosen for n in names}
 
 
-def make_task(client, model_label: str, effort: str, guardrails: dict[str, bool], run_name: str):
+def make_task(client, model_label: str, effort: str, guardrails: dict[str, bool], run_name: str,
+              user: str = "experiment"):
     def task(*, item, **_):
         data = item.input if hasattr(item, "input") else item["input"]
         result = robin.handle_turn(
             data["message"], data.get("history") or [], client=client, robin_model_label=model_label,
-            reasoning_effort=effort, participant="experiment", session_id=run_name, guardrails=guardrails,
+            reasoning_effort=effort, participant=user, session_id=run_name, guardrails=guardrails,
         )
         return result.answer
     return task
@@ -184,6 +185,7 @@ def main() -> None:
     parser.add_argument("--effort", default="medium", help="reasoning effort (only for reasoning models)")
     parser.add_argument("--guardrails", default="on",
                         help="on, off, or a list such as injection,facts (bank_account, injection, facts)")
+    parser.add_argument("--user", default="experiment", help="the user name shown in Langfuse")
     parser.add_argument("--concurrency", type=int, default=4, help="items run at the same time")
     args = parser.parse_args()
 
@@ -199,13 +201,18 @@ def main() -> None:
     run_name = f"{args.model} · effort {effort} · guardrails {guardrail_label(guardrails)}"
 
     langfuse = get_client()
-    dataset = langfuse.get_dataset(DATASET)
+    try:
+        dataset = langfuse.get_dataset(DATASET)
+    except Exception:  # the first run: upload the dataset first
+        upload()
+        dataset = langfuse.get_dataset(DATASET)
     result = dataset.run_experiment(
         name="Robin", run_name=run_name,
         description=f"Robin on {model_id}, guardrails {guardrail_label(guardrails)}",
-        task=make_task(OpenAI(), args.model, args.effort, guardrails, run_name),
+        task=make_task(OpenAI(), args.model, args.effort, guardrails, run_name, args.user),
         evaluators=EVALUATORS, max_concurrency=args.concurrency,
-        metadata={"model": model_id, "reasoning_effort": effort, "guardrails": guardrail_label(guardrails)},
+        metadata={"model": model_id, "reasoning_effort": effort, "guardrails": guardrail_label(guardrails),
+                  "started_by": args.user},
     )
     langfuse.flush()
     print(result.format())

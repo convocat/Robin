@@ -37,7 +37,7 @@ python experiments/run_experiment.py --model "GPT-6 Sol" --effort low --guardrai
 
 `--guardrails` takes `on`, `off`, or a list of the ones to switch on: `bank_account`, `injection`, `facts`. To try another model, point `COMPARE_MODEL` in your `.env` at it (for example `COMPARE_MODEL=gpt-6-luna`) and run with `--model "GPT-4.1 mini"`: that label then uses your model.
 
-Each run gets a name such as `GPT-6 Sol · effort medium · guardrails all off`, and four scores per item, checked in code:
+Add `--user "Your name"` to show your name as the user in Langfuse (the default is `experiment`). Each run gets a name such as `GPT-6 Sol · effort medium · guardrails all off`, and four scores per item, checked in code:
 
 | Score | Pass when |
 | --- | --- |
@@ -49,6 +49,16 @@ Each run gets a name such as `GPT-6 Sol · effort medium · guardrails all off`,
 Every item also has Robin's usual trace inside it, with the guardrail steps and the `outcome` score. The runs use the tracing environment `experiment`, so they stay apart from the course chats.
 
 Each item makes up to five model calls with guardrails on, so a run of 51 items is a few hundred calls. Check your OpenAI spending limit before running many settings.
+
+## 3. On GitHub, with one button
+
+The workflow `.github/workflows/experiment.yml` runs the script on GitHub's servers, so you don't need Python on your own computer.
+
+1. **Add your keys once**, in the repository on GitHub: **Settings > Secrets and variables > Actions > New repository secret**. Add three secrets: `OPENAI_API_KEY`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY`. Use keys for the Langfuse project you want the runs in. GitHub keeps secrets hidden, also from people who can read the repository. If your Langfuse project isn't in the EU region, add a *variable* (not a secret) `LANGFUSE_BASE_URL` on the same page.
+2. **Start a run:** **Actions > Run Robin experiment > Run workflow**. Choose one run (a model and a guardrail setting) or the comparison (both models, guardrails on and off: four runs), and fill in your name as the user.
+3. **Look at the results** in Langfuse under **Datasets > robin-experiment**. The first run uploads the dataset by itself.
+
+A comparison makes four runs of 51 items, so up to a thousand model calls with guardrails on. Check your OpenAI spending limit first.
 
 ## The judge for "does it do what a good answer does"
 

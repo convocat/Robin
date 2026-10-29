@@ -1,0 +1,76 @@
+# Runs Robin on the experiment dataset in Langfuse (experiments/run_experiment.py).
+# Start it under Actions > "Run Robin experiment" > Run workflow.
+# Needs three repository secrets (Settings > Secrets and variables > Actions):
+#   OPENAI_API_KEY, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
+# and optionally the variable LANGFUSE_BASE_URL (default: the EU region, https://cloud.langfuse.com).
+name: Run Robin experiment
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "What to run"
+        type: choice
+        default: "one run"
+        options:
+          - "one run"
+          - "comparison: both models, guardrails on and off"
+      model:
+        description: "Robin's model (for one run)"
+        type: choice
+        default: "GPT-6 Sol"
+        options: ["GPT-6 Sol", "GPT-4.1 mini"]
+      guardrails:
+        description: "Guardrails (for one run): on, off, or a list such as injection,facts"
+        type: string
+        default: "on"
+      effort:
+        description: "Reasoning effort (GPT-6 Sol only)"
+        type: choice
+        default: "medium"
+        options: ["none", "low", "medium", "high"]
+      user:
+        description: "User name shown in Langfuse"
+        type: string
+        default: "Maaike"
+
+permissions:
+  contents: read
+
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      LANGFUSE_BASE_URL: ${{ vars.LANGFUSE_BASE_URL || 'https://cloud.langfuse.com' }}
+      LANGFUSE_TRACING_ENVIRONMENT: experiment
+      MODEL: ${{ inputs.model }}
+      GUARDRAILS: ${{ inputs.guardrails }}
+      EFFORT: ${{ inputs.effort }}
+      RUN_USER: ${{ inputs.user }}
+      RUNS: ${{ inputs.runs }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Check the secrets are there
+        run: |
+          for name in OPENAI_API_KEY LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY; do
+            if [ -z "${!name}" ]; then echo "::error::The repository secret $name is missing."; exit 1; fi
+          done
+      - run: pip install -r requirements.txt
+      - name: Run the experiment
+        run: |
+          if [ "$RUNS" = "one run" ]; then
+            python experiments/run_experiment.py --model "$MODEL" --guardrails "$GUARDRAILS" --effort "$EFFORT" --user "$RUN_USER"
+          else
+            for model in "GPT-6 Sol" "GPT-4.1 mini"; do
+              for guardrails in on off; do
+                python experiments/run_experiment.py --model "$model" --guardrails "$guardrails" --effort "$EFFORT" --user "$RUN_USER"
+              done
+            done
+          fi
