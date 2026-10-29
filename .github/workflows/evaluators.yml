@@ -1,0 +1,39 @@
+# Creates Robin's LLM-as-a-Judge evaluators in Langfuse, from the prompts in EVALUATORS.md
+# (experiments/create_evaluators.py). Evaluators and rules that already exist are left alone.
+# Start it under Actions > "Set up Langfuse evaluators" > Run workflow.
+# Uses the same repository secrets as the experiment workflow.
+name: Set up Langfuse evaluators
+
+on:
+  workflow_dispatch:
+    inputs:
+      judge_model:
+        description: "Model the judges run on (through your OpenAI LLM connection in Langfuse)"
+        type: string
+        default: "gpt-6-luna"
+
+permissions:
+  contents: read
+
+jobs:
+  evaluators:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      LANGFUSE_BASE_URL: ${{ vars.LANGFUSE_BASE_URL || 'https://cloud.langfuse.com' }}
+      JUDGE_MODEL: ${{ inputs.judge_model }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Check the secrets are there
+        run: |
+          for name in LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY; do
+            if [ -z "${!name}" ]; then echo "::error::The repository secret $name is missing."; exit 1; fi
+          done
+      - run: pip install -r requirements.txt
+      - name: Create the evaluators and rules
+        run: python experiments/create_evaluators.py

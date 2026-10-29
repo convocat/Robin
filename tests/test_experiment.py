@@ -69,3 +69,14 @@ def test_a_local_run_with_the_fake_model():
     assert all(isinstance(o, str) and o for o in outputs)
     names = {e.name for r in result.item_results for e in r.evaluations}
     assert {"eval: under 60 words", "eval: at most one question", "eval: no bank account number repeated"} <= names
+
+
+def test_every_evaluator_the_rules_use_is_in_evaluators_md():
+    import create_evaluators as ce
+    prompts = ce.read_evaluators()
+    for name in set(ce.EXPERIMENT_EVALS + ce.LIVE_EVALS):
+        assert name in prompts, name
+        assert {"input", "output"} <= set(ce.variables_of(prompts[name])), name
+    assert "expected_output" in ce.variables_of(prompts["eval: matches the good answer"])
+    assert not any("expected_output" in ce.variables_of(prompts[n]) for n in ce.LIVE_EVALS)
+    ce.build_requests(prompts, None)  # every request passes the SDK's validation

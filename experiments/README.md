@@ -68,7 +68,9 @@ The scoring happens in Langfuse, with **LLM-as-a-Judge evaluators** you build in
 | `eval: matches the good answer` | Does what the item's good-answer description says (uses the expected output) |
 | `eval: only facts from the policy` | Every fact is in the return policy |
 
-Set each one to **Boolean**, aim it at **experiments** on the dataset `robin-experiment`, and Langfuse scores every new run. True means Robin did well, so the ideal is true for every item. Each judgement is one model call, so six evaluators on a run of 51 items is about 300 calls: use a small model such as GPT-6 Luna for the judges.
+**To create them all at once:** run **Actions > Set up Langfuse evaluators > Run workflow** on GitHub (or `python experiments/create_evaluators.py` on your own computer). It creates every evaluator in `EVALUATORS.md` as a Boolean LLM-as-a-Judge evaluator, on GPT-6 Luna, plus two rules: **Robin – experiments** (on, for new runs of `robin-experiment`) and **Robin – live chats** (off; switch it on in Langfuse when you want live scoring). Evaluators and rules that already exist are left alone. Afterwards they're under **Evaluators**, where you and your students can open, read and edit each one.
+
+To build one by hand instead, set it to **Boolean**, aim it at **experiments** on the dataset `robin-experiment`, and Langfuse scores every new run. True means Robin did well, so the ideal is true for every item. Each judgement is one model call, so six evaluators on a run of 51 items is about 300 calls: use a small model such as GPT-6 Luna for the judges.
 
 **Optional, exact checks in code:** `code_evaluator_form_checks.py` does the four form checks as one Langfuse **code evaluator** (Evaluators > New evaluator > Code evaluator > Python). It's exact and free, but students see Python code instead of a prompt. Comparing it with the LLM judges is a good discussion: the word count in particular is something a model does badly and a rule does perfectly. The script can also score these checks itself with `--local-checks`.
 
