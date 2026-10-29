@@ -216,8 +216,9 @@ def main() -> None:
     )
     langfuse.flush()
     print(result.format())
-    if result.dataset_run_url:
-        print("Open the run in Langfuse:", result.dataset_run_url)
+    url = getattr(result, "experiment_url", None) or getattr(result, "dataset_run_url", None)
+    if url:
+        print("Open the run in Langfuse:", url)
 
 
 if __name__ == "__main__":
