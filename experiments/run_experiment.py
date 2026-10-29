@@ -9,9 +9,9 @@ Then one run per setting you want to compare, for example:
     python experiments/run_experiment.py --model "GPT-4.1 mini" --guardrails on
     python experiments/run_experiment.py --model "GPT-6 Sol" --guardrails injection,facts
 
-Every run appears in Langfuse under Datasets > robin-experiment, with four scores per item that are
-checked in code (no model needed): under 60 words, at most one question, no bank account number
-repeated, and no instructions leaked. Add LLM-as-a-Judge evaluators in Langfuse for the rest.
+Every run appears in Langfuse under Experiments. The checks live in Langfuse as evaluators (see
+experiments/README.md): the code evaluator "Robin – form checks" and the judge. Add --local-checks to
+also score the four form checks from this script, for when they aren't set up in Langfuse.
 
 Uses the same .env as Robin: OPENAI_API_KEY, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_BASE_URL.
 """
@@ -186,6 +186,8 @@ def main() -> None:
     parser.add_argument("--guardrails", default="on",
                         help="on, off, or a list such as injection,facts (bank_account, injection, facts)")
     parser.add_argument("--user", default="experiment", help="the user name shown in Langfuse")
+    parser.add_argument("--local-checks", action="store_true",
+                        help="also score the four form checks here (leave off when they run as a Langfuse evaluator)")
     parser.add_argument("--concurrency", type=int, default=4, help="items run at the same time")
     args = parser.parse_args()
 
@@ -210,7 +212,7 @@ def main() -> None:
         name="Robin", run_name=run_name,
         description=f"Robin on {model_id}, guardrails {guardrail_label(guardrails)}",
         task=make_task(OpenAI(), args.model, args.effort, guardrails, run_name, args.user),
-        evaluators=EVALUATORS, max_concurrency=args.concurrency,
+        evaluators=EVALUATORS if args.local_checks else [], max_concurrency=args.concurrency,
         metadata={"model": model_id, "reasoning_effort": effort, "guardrails": guardrail_label(guardrails),
                   "started_by": args.user},
     )
