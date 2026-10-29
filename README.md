@@ -203,4 +203,5 @@ These are deliberate, so participants can find and improve them:
 | `requirements.txt` | Python packages |
 | `.env.example` | Template for your keys when running locally |
 | `tests/` | Offline tests with a fake model (`python -m pytest tests`) |
+| `experiments/` | A 51-item dataset for Langfuse experiments, and a script that runs Robin on it with a chosen model and guardrail setting. See `experiments/README.md` |
 | `tests/bank_account_cases.csv` | The bank account test set: 17 messages that must be masked, must stay, or are known gaps. Paste them into Robin, or run them with `python -m pytest tests/test_bank_accounts.py` |
