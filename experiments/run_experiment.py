@@ -84,9 +84,9 @@ def upload() -> None:
             name=CHAT_PROMPT, type="chat", labels=["production"], tags=["robin", "experiment"],
             commit_message="Robin's system prompt as a chat prompt, for experiments in the UI",
             prompt=[
-                {"type": "message", "role": "system", "content": prompts.SYSTEM_PROMPT},
+                {"role": "system", "content": prompts.SYSTEM_PROMPT},
                 {"type": "placeholder", "name": "history"},
-                {"type": "message", "role": "user", "content": "{{message}}"},
+                {"role": "user", "content": "{{message}}"},
             ],
         )
         print(f"Created prompt {CHAT_PROMPT}.")
