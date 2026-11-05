@@ -132,8 +132,24 @@ def seed_prompts() -> None:
             log.exception("could not check prompt %s in Langfuse", name)
 
 
-def _prompt(name: str):
-    """Get the 'production' version of a prompt from Langfuse, or the local text if that fails."""
+def prompt_label(value) -> str | None:
+    """A student's own prompt label from the course panel, cleaned up. None means: use production."""
+    label = re.sub(r"[^a-z0-9_.-]", "", str(value or "").strip().lower())[:36]
+    return label if label and label != "production" else None
+
+
+def _prompt(name: str, label: str | None = None):
+    """Get a prompt from Langfuse, or the local text if that fails.
+
+    With a label (a student's own version, set in the course panel), Robin first looks for that label
+    and falls back to 'production' if the label doesn't exist on this prompt.
+    """
+    if label:
+        try:
+            return get_client().get_prompt(name, label=label, cache_ttl_seconds=30, max_retries=0,
+                                           fetch_timeout_seconds=5)
+        except Exception:
+            log.info("no version with label %s for prompt %s; using production", label, name)
     try:
         return get_client().get_prompt(name, label="production", fallback=prompts.LANGFUSE_PROMPTS[name],
                                        cache_ttl_seconds=60, max_retries=1, fetch_timeout_seconds=5)
@@ -142,12 +158,24 @@ def _prompt(name: str):
         return None
 
 
-def _text(name: str, **values: str) -> tuple[str, object]:
+def _text(name: str, label: str | None = None, **values: str) -> tuple[str, object]:
     """Return (filled-in text, prompt to link in the trace). Fallback texts are not linked."""
-    prompt = _prompt(name)
+    prompt = _prompt(name, label)
     if prompt is None:
         return prompts.fill(prompts.LANGFUSE_PROMPTS[name], **values), None
     return prompt.compile(**values), (None if getattr(prompt, "is_fallback", False) else prompt)
+
+
+def _label_used(link, requested: str | None) -> str:
+    """What to show in the trace about the prompt version Robin used."""
+    labels = list(getattr(link, "labels", None) or [])
+    version = getattr(link, "version", None)
+    where = f"version {version}" if version else "local text"
+    if not requested:
+        return f"production ({where})"
+    if requested in labels:
+        return f"{requested} ({where})"
+    return f"{requested} not found, so production ({where})"
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +281,7 @@ def handle_turn(
     guardrails: dict | None = None,
     look_up: bool = False,
     max_results: int = lookup.DEFAULT_MAX_RESULTS,
+    label: str | None = None,
 ) -> TurnResult:
     seed_prompts()
     on = guardrail_switches(guardrails)
@@ -261,9 +290,10 @@ def handle_turn(
     robin_model = ROBIN_MODELS.get(robin_model_label, ROBIN_MODELS["GPT-6 Sol"])
     look_up = look_up is True
     max_results = lookup.max_results(max_results)
+    label = prompt_label(label)
     if not look_up:  # Robin's original set-up: the whole return policy in the system prompt
         policy, _ = _text("robin/return-policy")
-        system_prompt, system_link = _text("robin/system-prompt", return_policy=policy)
+        system_prompt, system_link = _text("robin/system-prompt", label, return_policy=policy)
         facts_prompt, facts_link = _text("robin/facts-check", return_policy=policy)
         checks = {"facts": (facts_prompt, facts_link), "retry_note": "robin/retry-note", "facts_step": STEPS["facts"]}
     injection_prompt, injection_link = _text("robin/injection-check")
@@ -284,7 +314,8 @@ def handle_turn(
         trace_name="Robin – chat turn",
         session_id=session_id,
         user_id=participant or "anonymous",
-        tags=["robin", f"model: {robin_model}", guardrail_tag, f"look-up: {'on' if look_up else 'off'}"],
+        tags=["robin", f"model: {robin_model}", guardrail_tag, f"look-up: {'on' if look_up else 'off'}",
+              *([f"prompt label: {label}"] if label else [])],
         version=APP_VERSION,
         # No trace-wide metadata here: Langfuse would copy it onto every step and clutter the
         # Metadata column. The settings go on the turn itself instead (see _finish).
@@ -325,10 +356,12 @@ def handle_turn(
             # --- Look-up (only when switched on): find the handbook sections for this question ---
             if look_up:
                 sources = _look_up(client, langfuse, masked_message, history, max_results, result)
-                system_prompt, system_link = _text("robin/system-prompt-lookup", sources=sources)
+                system_prompt, system_link = _text("robin/system-prompt-lookup", label, sources=sources)
                 facts_prompt, facts_link = _text("robin/facts-check-lookup", sources=sources)
                 checks = {"facts": (facts_prompt, facts_link), "retry_note": "robin/retry-note-lookup",
                           "facts_step": STEPS["facts_lookup"]}
+
+            result.summary["system_prompt_used"] = _label_used(system_link, label)
 
             # --- 3. Robin's answer -------------------------------------------------------
             messages = [{"role": "system", "content": system_prompt},

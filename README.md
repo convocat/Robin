@@ -75,6 +75,15 @@ What changes:
 
 **On a first visit, all three guardrails are off**, so participants first see Robin with the system prompt alone, and then switch guardrails on. The browser remembers each person's switches after that. (The API itself treats any guardrail the browser doesn't mention as on.)
 
+### Your own version of the system prompt (prompt labels)
+
+Several people can try their own version of Robin's system prompt at the same time, on the same Robin:
+
+1. In Langfuse, open `robin/system-prompt` (or `robin/system-prompt-lookup` when the look-up is on), change it, and save it as a new version with your own label, for example `leela`. Don't move the `production` label.
+2. In Robin's course panel, type the same label under **Prompt label**.
+
+Your chats now use your version; everyone else still gets `production`. If your label doesn't exist on that prompt, Robin uses `production`. The turn's metadata shows which version was used (`system_prompt_used`), and the trace gets the tag `prompt label: leela`. Only the system prompt follows the label: the guardrails always use `production`.
+
 ### Look-up (RAG)
 
 Under **Look-up (RAG)** in the course panel, you can switch on **Look things up in the handbook**. Robin then works like a RAG bot: instead of the return policy in its system prompt, it searches the Nest & Co customer handbook in a **content database** and answers from the chunks it finds. **Max results** sets how many chunks Robin gets for each question: 1, 3 or 5.

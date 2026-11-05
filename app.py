@@ -65,6 +65,7 @@ def chat():
             guardrails=data.get("guardrails"),  # e.g. {"facts": false}; anything missing stays on
             look_up=data.get("look_up") is True,  # off unless the course panel switches it on
             max_results=data.get("max_results"),
+            label=data.get("prompt_label"),  # a student's own version of the system prompt; empty = production
         )
         return jsonify({
             "answer": result.answer,

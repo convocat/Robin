@@ -17,7 +17,7 @@ const textOf = (message) =>
 export function createRobinAdapter(getSettings) {
   return {
     async run({ messages, abortSignal }) {
-      const { name, passcode, model, effort, sessionId, guardrails, lookUp, maxResults } = getSettings();
+      const { name, passcode, model, effort, sessionId, guardrails, lookUp, maxResults, promptLabel } = getSettings();
       const history = messages.slice(0, -1).map((m) => ({ role: m.role, content: textOf(m) }));
       const message = textOf(messages.at(-1));
 
@@ -28,7 +28,8 @@ export function createRobinAdapter(getSettings) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message, history, name, passcode, model, effort, guardrails,
-            look_up: lookUp === true, max_results: Number(maxResults), session_id: sessionId,
+            look_up: lookUp === true, max_results: Number(maxResults), prompt_label: promptLabel || "",
+            session_id: sessionId,
           }),
           signal: abortSignal,
         });

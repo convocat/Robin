@@ -94,6 +94,13 @@ function CoursePanel({ settings, setSettings }) {
               </select>
             </label>
           </div>
+          <label>
+            Prompt label <small>(optional)</small>
+            <input id="robin-label" value={settings.promptLabel} onChange={update("promptLabel")} autoComplete="off" placeholder="production" />
+            <small>
+              Try your own version of Robin's system prompt: save it in Langfuse with this label. Empty means production.
+            </small>
+          </label>
           <fieldset className="course__guards">
             <legend>Guardrails</legend>
             {GUARDRAILS.map((g) => (
@@ -194,6 +201,7 @@ export default function App() {
     guardrails: loadGuardrails(),
     lookUp: load("lookUp", "false") === "true", // off by default: Robin as it was, until you switch it on
     maxResults: load("maxResults", "3"),
+    promptLabel: load("promptLabel", ""),
   }));
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [open, setOpen] = useState(false);
