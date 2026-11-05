@@ -11,6 +11,13 @@ Every customer message becomes ONE trace in Langfuse, with these steps inside it
     │   └── Facts check (small model)
     └── 5. and 6.: only if the facts check blocked the first answer (a rewrite, then a second check)
 
+With "Look things up" switched on in the course panel, Robin works like a RAG bot: instead of the whole
+return policy, it gets the handbook sections that match the question. Two steps appear before step 3:
+
+    ├── Look-up 1 – rewrite the question into a search query   (small model)
+    ├── Look-up 2 – search the handbook                        (embeddings, see lookup.py)
+    │   └── Turn the search query into numbers (embedding)
+
 Each guardrail step carries its own score (`guardrail: ...`), so clicking a step shows its result on
 its Scores tab. The `outcome` and `user feedback` scores belong to the whole turn.
 
@@ -32,9 +39,10 @@ from dataclasses import dataclass, field
 from langfuse import get_client, propagate_attributes
 from langfuse.api import NotFoundError
 
+import lookup
 import prompts
 
-APP_VERSION = "robin-v1"
+APP_VERSION = "robin-v2"
 
 # Model names come from environment variables, so you can change them without editing code.
 ROBIN_MODELS = {
@@ -170,6 +178,15 @@ STEPS = {
     "facts": {"layer": "output guardrail", "uses_llm": "yes: the small model",
               "what_it_does": "Checks that every fact in Robin's answer is in the return policy.",
               "if_it_fails": "fail closed: the answer is not sent"},
+    "facts_lookup": {"layer": "output guardrail", "uses_llm": "yes: the small model",
+                     "what_it_does": "Checks that every fact in Robin's answer is in the handbook sections it was given.",
+                     "if_it_fails": "fail closed: the answer is not sent"},
+    "rewrite": {"layer": "look-up (RAG)", "slide_step": "question recognition", "uses_llm": "yes: the small model",
+                "what_it_does": "Turns the customer's message and the conversation so far into a search query."},
+    "search": {"layer": "look-up (RAG)", "slide_step": "information retrieval",
+               "uses_llm": "no: an embedding model turns text into numbers",
+               "what_it_does": "Finds the handbook sections whose meaning is closest to the search query.",
+               "if_it_fails": "Robin gets no sections, so it should say it doesn't know"},
 }
 
 
@@ -234,17 +251,22 @@ def handle_turn(
     participant: str = "anonymous",
     session_id: str = "no-session",
     guardrails: dict | None = None,
+    look_up: bool = False,
+    max_results: int = lookup.DEFAULT_MAX_RESULTS,
 ) -> TurnResult:
     seed_prompts()
     on = guardrail_switches(guardrails)
     switched_off = [label for key, label in GUARDRAILS.items() if not on[key]]
     langfuse = get_client()
     robin_model = ROBIN_MODELS.get(robin_model_label, ROBIN_MODELS["GPT-6 Sol"])
-    policy, _ = _text("robin/return-policy")
-    system_prompt, system_link = _text("robin/system-prompt", return_policy=policy)
+    look_up = look_up is True
+    max_results = lookup.max_results(max_results)
+    if not look_up:  # Robin's original set-up: the whole return policy in the system prompt
+        policy, _ = _text("robin/return-policy")
+        system_prompt, system_link = _text("robin/system-prompt", return_policy=policy)
+        facts_prompt, facts_link = _text("robin/facts-check", return_policy=policy)
+        checks = {"facts": (facts_prompt, facts_link), "retry_note": "robin/retry-note", "facts_step": STEPS["facts"]}
     injection_prompt, injection_link = _text("robin/injection-check")
-    facts_prompt, facts_link = _text("robin/facts-check", return_policy=policy)
-    checks = {"facts": (facts_prompt, facts_link)}
     effort = reasoning_effort if robin_model in REASONING_MODELS else None
 
     # Guardrail 1 runs BEFORE anything is traced, so bank account numbers never reach Langfuse or OpenAI.
@@ -262,7 +284,7 @@ def handle_turn(
         trace_name="Robin – chat turn",
         session_id=session_id,
         user_id=participant or "anonymous",
-        tags=["robin", f"model: {robin_model}", guardrail_tag],
+        tags=["robin", f"model: {robin_model}", guardrail_tag, f"look-up: {'on' if look_up else 'off'}"],
         version=APP_VERSION,
         # No trace-wide metadata here: Langfuse would copy it onto every step and clutter the
         # Metadata column. The settings go on the turn itself instead (see _finish).
@@ -275,6 +297,7 @@ def handle_turn(
             language = None
 
             result.summary["guardrails_switched_off"] = ", ".join(switched_off) or "none"
+            result.summary["look_up"] = f"on, max {max_results} sections" if look_up else "off"
             result.details["settings"] = {
                 "robin_model": robin_model,
                 "reasoning_effort": effort or "not used",
@@ -299,6 +322,14 @@ def handle_turn(
                 result.outcome = "blocked by input guardrail"
                 return _finish(turn, result, facts_result="SKIPPED")
 
+            # --- Look-up (only when switched on): find the handbook sections for this question ---
+            if look_up:
+                sources = _look_up(client, langfuse, masked_message, history, max_results, result)
+                system_prompt, system_link = _text("robin/system-prompt-lookup", sources=sources)
+                facts_prompt, facts_link = _text("robin/facts-check-lookup", sources=sources)
+                checks = {"facts": (facts_prompt, facts_link), "retry_note": "robin/retry-note-lookup",
+                          "facts_step": STEPS["facts_lookup"]}
+
             # --- 3. Robin's answer -------------------------------------------------------
             messages = [{"role": "system", "content": system_prompt},
                         *_clean_history(history),
@@ -318,11 +349,11 @@ def handle_turn(
                 result.answer = draft
                 result.outcome = "answered"
                 return _finish(turn, result, facts_result="OFF")
-            facts_result, unsupported, language = _facts_check(client, langfuse, draft, checks["facts"],
+            facts_result, unsupported, language = _facts_check(client, langfuse, draft, checks,
                                                                name="4. Output guardrail – facts check")
             if facts_result == "BLOCK":
                 result.summary["rewrite_needed"] = "yes"
-                retry_note, _ = _text("robin/retry-note",
+                retry_note, _ = _text(checks["retry_note"],
                                       unsupported="\n".join(f"- {item}" for item in unsupported) or "- (not specified)")
                 retry_messages = messages + [
                     {"role": "assistant", "content": draft},
@@ -332,7 +363,7 @@ def handle_turn(
                     draft = _chat(client, name="5. Robin rewrites the answer", model=robin_model,
                                   effort=effort, messages=retry_messages, metadata=STEPS["retry"], prompt=system_link)
                     facts_result, unsupported, language = _facts_check(
-                        client, langfuse, draft, checks["facts"], name="6. Output guardrail – facts check on the rewrite")
+                        client, langfuse, draft, checks, name="6. Output guardrail – facts check on the rewrite")
                 except Exception as error:
                     turn.update(level="ERROR", status_message=str(error))
                     facts_result = "ERROR"
@@ -388,8 +419,67 @@ def _injection_step(client, langfuse, masked_message: str, injection_prompt: str
     return result, explanation, language
 
 
-def _facts_check(client, langfuse, draft: str, facts: tuple, name: str) -> tuple[str, list, str | None]:
+def _look_up(client, langfuse, masked_message: str, history: list[dict], max_results: int,
+             result: TurnResult) -> str:
+    """The look-up (RAG): rewrite the question into a search query, then search the handbook.
+
+    Returns the handbook sections as text for Robin's system prompt. Two steps in the trace:
+    'Look-up 1' (a small model writes the query) and 'Look-up 2' (the search itself).
+    """
+    handbook, handbook_link = _text("robin/handbook")
+    handbook_version = getattr(handbook_link, "version", None) or "local file"
+
+    # Look-up 1: question recognition. A small model turns the message (plus context) into a query.
+    recent = history[-6:]
+    conversation = "\n".join(f"{item['role']}: {item['content']}" for item in recent) or "(none)"
+    rewrite_prompt, rewrite_link = _text("robin/query-rewrite")
+    try:
+        query = _chat(client, name="Look-up 1 – rewrite the question into a search query", model=GUARDRAIL_MODEL,
+                      effort=GUARDRAIL_EFFORT, metadata=STEPS["rewrite"], prompt=rewrite_link,
+                      messages=[{"role": "system", "content": rewrite_prompt},
+                                {"role": "user", "content": f"Conversation so far:\n{conversation}\n\n"
+                                                            f"Latest message:\n{masked_message}"}]).strip()
+    except Exception:
+        log.exception("query rewrite failed; searching with the customer's own words")
+        query = ""
+    query = query or masked_message
+
+    # Look-up 2: information retrieval. The query becomes an embedding and is compared with every chunk.
+    with langfuse.start_as_current_observation(
+        as_type="retriever", name="Look-up 2 – search the handbook", input=query,
+    ) as search:
+        try:
+            embedded_now = lookup.INDEX.ensure(client, handbook)
+            with langfuse.start_as_current_observation(
+                as_type="embedding", name="Turn the search query into numbers (embedding)",
+                model=lookup.EMBEDDING_MODEL, input=query,
+            ) as embedding:
+                vectors, tokens = lookup.embed(client, [query])
+                embedding.update(output=f"{len(vectors[0])} numbers", usage_details={"input_tokens": tokens})
+            found = lookup.INDEX.search(vectors[0], max_results)
+            sections = [{"section": chunk.section, "similarity": round(score, 3), "text": chunk.text}
+                        for chunk, score in found]
+            search.update(output=sections, metadata={
+                **STEPS["search"], "max_results": max_results, "handbook_version": str(handbook_version),
+                "handbook_chunks": len(lookup.INDEX.chunks), "embedding_model": lookup.EMBEDDING_MODEL,
+                "handbook_embedded_in_this_turn": "yes" if embedded_now else "no",
+            })
+            sources = lookup.format_sources(found)
+            result.summary["search_query"] = query
+            result.summary["sections_found"] = ", ".join(f"{s['section']} ({s['similarity']})" for s in sections)
+        except Exception as error:
+            log.exception("handbook search failed")
+            search.update(level="ERROR", status_message=str(error), metadata=STEPS["search"])
+            sources = "(The handbook could not be searched.)"
+            result.summary["search_query"] = query
+            result.summary["sections_found"] = "ERROR: the search failed"
+    return sources
+
+
+def _facts_check(client, langfuse, draft: str, checks: dict, name: str) -> tuple[str, list, str | None]:
     """Output guardrail. Returns (PASS/BLOCK/ERROR, unsupported statements, language)."""
+    facts = checks["facts"]
+    source = "the handbook sections" if checks["facts_step"] is STEPS["facts_lookup"] else "the return policy"
     with langfuse.start_as_current_observation(
         as_type="guardrail", name=name, input=draft,
     ) as guard:
@@ -402,13 +492,13 @@ def _facts_check(client, langfuse, draft: str, facts: tuple, name: str) -> tuple
             result = "BLOCK" if str(verdict.get("result")).upper() == "BLOCK" else "PASS"
             unsupported = [str(item) for item in verdict.get("unsupported") or []]
             language = verdict.get("language")
-            explanation = ("All facts are in the return policy." if result == "PASS"
-                           else "Not in the return policy: " + "; ".join(unsupported))
+            explanation = (f"All facts are in {source}." if result == "PASS"
+                           else f"Not in {source}: " + "; ".join(unsupported))
         except Exception as error:  # fail closed: if we can't check the answer, we don't send it
             result, unsupported, language = "ERROR", [], None
             explanation = f"The check failed, so the answer was not sent: {error}"
         guard.update(output=result, metadata={"result": result, "explanation": explanation,
-                                              "unsupported": "; ".join(unsupported) or "none", **STEPS["facts"]})
+                                              "unsupported": "; ".join(unsupported) or "none", **checks["facts_step"]})
         guard.score(name="guardrail: facts check", value=result, data_type="CATEGORICAL", comment=explanation)
         if result != "PASS":
             guard.update(level="WARNING", status_message=explanation)
@@ -418,7 +508,7 @@ def _facts_check(client, langfuse, draft: str, facts: tuple, name: str) -> tuple
 OUTCOME_NOTES = {
     "answered": "Robin's answer passed every guardrail that was on, and was sent.",
     "blocked by input guardrail": "The message tried to manipulate Robin, so Robin never saw it. A fixed answer was sent.",
-    "fallback after output guardrail": "Robin's answer contained facts that aren't in the policy, twice. A fixed, honest answer was sent instead.",
+    "fallback after output guardrail": "Robin's answer contained facts that aren't in its sources, twice. A fixed, honest answer was sent instead.",
     "error": "Something went wrong while calling the model. A fixed apology was sent.",
 }
 

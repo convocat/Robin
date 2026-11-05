@@ -75,6 +75,25 @@ What changes:
 
 **On a first visit, all three guardrails are off**, so participants first see Robin with the system prompt alone, and then switch guardrails on. The browser remembers each person's switches after that. (The API itself treats any guardrail the browser doesn't mention as on.)
 
+### Look-up (RAG)
+
+Under **Look-up (RAG)** in the course panel, you can switch on **Look things up in the handbook**. Robin then works like a RAG bot: instead of the return policy in its system prompt, it searches the Nest & Co customer handbook (`content/handbook.md`) and answers from the sections it finds. **Max results** sets how many sections Robin gets for each question: 1, 3 or 5.
+
+It's off by default, so Robin behaves as before until you switch it on.
+
+What happens, step by step (the same steps as the course slide "DocBot: from question to answer"):
+
+1. **Ingestion.** The handbook is cut into chunks, one per section, and each chunk is turned into an embedding: a list of numbers that captures its meaning. This happens once, the first time someone uses the look-up, and again whenever the handbook changes.
+2. **Question recognition.** A small model rewrites the customer's message, plus the conversation so far, into a search query (prompt `robin/query-rewrite`).
+3. **Information retrieval.** The query becomes an embedding too, and the sections closest in meaning are picked.
+4. **Response generation.** Robin answers with those sections in its system prompt (prompt `robin/system-prompt-lookup`). The facts check compares the answer with the same sections (prompt `robin/facts-check-lookup`).
+
+In Langfuse, a turn with the look-up on shows two extra steps before `3. Robin writes the answer`: `Look-up 1 – rewrite the question into a search query` and `Look-up 2 – search the handbook`. Open the second one to see the query, the sections found and how similar each one was (1 is the same meaning, 0 is unrelated). Every trace gets the tag `look-up: on` or `look-up: off`.
+
+**The handbook lives in Langfuse too,** as the prompt `robin/handbook`, so you can edit it like any other prompt and keep its version history. Save a new version with the `production` label, and Robin uses it within a minute. The embeddings are made again automatically.
+
+The embeddings use OpenAI's `text-embedding-3-small`. To use another embedding model, set the environment variable `EMBEDDING_MODEL`.
+
 ## Run Robin on your own computer
 
 You need Python 3.11 or newer.

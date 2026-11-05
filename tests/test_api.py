@@ -76,3 +76,19 @@ def test_guardrail_switches_reach_robin(client):
     data = chat(client, message="Refund to NL91 ABNA 0417 1643 00",
                 guardrails={"bank_account": False, "injection": False, "facts": False}).get_json()
     assert "0417" in data["customer_message"] and data["outcome"] == "answered"
+
+
+def test_look_up_settings_reach_robin(client, monkeypatch):
+    seen = {}
+
+    def fake_turn(message, history, **kwargs):
+        seen.update(kwargs)
+        return api.robin.TurnResult(answer="ok", customer_message=message)
+
+    monkeypatch.setattr(api.robin, "handle_turn", fake_turn)
+    chat(client, look_up=True, max_results=5)
+    assert seen["look_up"] is True and seen["max_results"] == 5
+    chat(client)  # an older page that doesn't send the setting: look-up stays off
+    assert seen["look_up"] is False
+    chat(client, look_up="yes")  # only a real true switches it on
+    assert seen["look_up"] is False

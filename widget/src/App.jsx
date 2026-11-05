@@ -3,6 +3,7 @@ import RobinWidget, { MOCK } from "./RobinWidget.jsx";
 
 const MODELS = ["GPT-6 Sol", "GPT-4.1 mini"];
 const EFFORTS = ["none", "low", "medium", "high"];
+const MAX_RESULTS = ["1", "3", "5"];
 
 // The guardrails you can switch off, to see what Robin does with the system prompt alone.
 const GUARDRAILS = [
@@ -50,6 +51,11 @@ function CoursePanel({ settings, setSettings }) {
       save("guardrails", JSON.stringify(guardrails));
       return { ...current, guardrails };
     });
+  };
+  const toggleLookUp = (event) => {
+    const checked = event.target.checked;
+    save("lookUp", String(checked));
+    setSettings((current) => ({ ...current, lookUp: checked }));
   };
   const allOff = GUARDRAILS.every((g) => !settings.guardrails[g.key]);
   return (
@@ -104,6 +110,27 @@ function CoursePanel({ settings, setSettings }) {
                 ? "All off: Robin runs on the system prompt alone."
                 : "Switch guardrails on and off to compare the answers and the traces."}
             </p>
+          </fieldset>
+          <fieldset className="course__guards">
+            <legend>Look-up (RAG)</legend>
+            <label className="course__check">
+              <input type="checkbox" checked={settings.lookUp} onChange={toggleLookUp} />
+              <span>Look things up in the handbook</span>
+            </label>
+            <p className="course__hint">
+              {settings.lookUp
+                ? "On: Robin searches the customer handbook and answers from the sections it finds."
+                : "Off: Robin only knows the return policy in its system prompt."}
+            </p>
+            <label>
+              Max results
+              <select id="robin-max-results" value={settings.maxResults} onChange={update("maxResults")} disabled={!settings.lookUp}>
+                {MAX_RESULTS.map((n) => (
+                  <option key={n}>{n}</option>
+                ))}
+              </select>
+              <small>How many handbook sections Robin gets for each question.</small>
+            </label>
           </fieldset>
           {MOCK && <p className="course__mock">Preview: Robin's answers are scripted, and these settings have no effect yet.</p>}
         </div>
@@ -160,6 +187,8 @@ export default function App() {
     model: load("model", "GPT-6 Sol"),
     effort: load("effort", "medium"),
     guardrails: loadGuardrails(),
+    lookUp: load("lookUp", "false") === "true", // off by default: Robin as it was, until you switch it on
+    maxResults: load("maxResults", "3"),
   }));
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [open, setOpen] = useState(false);

@@ -62,6 +62,8 @@ def chat():
             participant=name,
             session_id=str(data.get("session_id") or "no-session")[:100],
             guardrails=data.get("guardrails"),  # e.g. {"facts": false}; anything missing stays on
+            look_up=data.get("look_up") is True,  # off unless the course panel switches it on
+            max_results=data.get("max_results"),
         )
         return jsonify({
             "answer": result.answer,
