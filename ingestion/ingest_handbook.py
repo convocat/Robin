@@ -74,7 +74,7 @@ def main(client=None) -> int:
 
         with langfuse.start_as_current_observation(as_type="span", name="3. Chunk") as step:
             chunks = lookup.split_into_chunks(handbook)
-            step.update(output=[{"chunk": n, "section": c.section, "characters": len(c.text)}
+            step.update(output=[{"chunk": n, "section": c.section, "characters": len(c.text), "text": c.text}
                                 for n, c in enumerate(chunks, start=1)],
                         metadata={"rule": "one chunk per section (## heading)", "chunks": len(chunks)})
         print(f"3. Cut it into {len(chunks)} chunks: " + ", ".join(c.section for c in chunks) + ".")

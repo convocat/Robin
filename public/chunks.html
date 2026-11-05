@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Content database – Robin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Familjen+Grotesk:wght@500;700&display=swap" />
+<style>
+  :root {
+    --paper: #f2f3ee; --card: #fbfbf8; --ink: #1d2a23; --muted: #5d6a62; --line: #d6dbd2;
+    --fir: #2f4b3b; --clay: #c98f73; --fog: #dfe3dc; --sun: #e2b64c;
+    --font-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+    --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+    --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5; }
+  .demo-bar { background: var(--fir); color: var(--paper); text-align: center; font-size: 14px; padding: 8px 16px; }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+  .back { color: var(--muted); font-size: 14px; text-decoration: none; }
+  .back:hover { color: var(--ink); }
+  .eyebrow { margin: 24px 0 4px; color: var(--clay); font-weight: 700; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-family: var(--font-display); font-size: clamp(30px, 5vw, 44px); letter-spacing: -0.02em; line-height: 1.1; margin: 0 0 12px; }
+  .lead { color: var(--muted); max-width: 640px; margin: 0 0 24px; }
+  form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-bottom: 24px; }
+  label { display: grid; gap: 4px; font-size: 14px; font-weight: 700; }
+  input { font: inherit; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; min-width: 220px; }
+  button { font: inherit; font-weight: 700; padding: 10px 18px; border: 0; border-radius: 999px; background: var(--fir); color: var(--paper); cursor: pointer; }
+  button:hover { background: #223a2d; }
+  .message { padding: 12px 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+  .message--error { border-color: var(--clay); }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .summary div { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  .summary b { display: block; font-family: var(--font-display); font-size: 22px; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+  .summary span { color: var(--muted); font-size: 13px; }
+  .chunks { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .chunk { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
+  .chunk__head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+  .chunk__number { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+  .chunk__head h2 { font-family: var(--font-display); font-size: 20px; margin: 0; }
+  .chunk__size { color: var(--muted); font-size: 13px; margin-left: auto; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; font-weight: 700; font-size: 14px; color: var(--fir); }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-body); font-size: 15px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 8px 0 0; }
+  .numbers { margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .numbers code { display: inline-block; font-family: var(--font-mono); font-size: 12px; background: var(--fog); color: var(--ink); border-radius: 6px; padding: 2px 6px; margin: 2px 2px 0 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="demo-bar">Demo shop for the course <em>GenAI design for conversations and content</em>. Nest &amp; Co is invented.</div>
+<main>
+  <a class="back" href="/">← Back to the shop</a>
+  <p class="eyebrow">Robin · look-up (RAG)</p>
+  <h1>The content database</h1>
+  <p class="lead">Every card is one chunk of the customer handbook, as the ingestion pipeline stored it: the text Robin can find, and the embedding it's found by. Robin searches these chunks; it never reads the handbook itself.</p>
+
+  <form id="form">
+    <label>Course passcode <input id="passcode" type="password" autocomplete="off" /></label>
+    <button type="submit">Show the chunks</button>
+  </form>
+
+  <p id="status" class="message" hidden></p>
+  <section id="summary" class="summary" hidden aria-label="About this ingestion"></section>
+  <ol id="chunks" class="chunks"></ol>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const MESSAGES = {
+    passcode: "That passcode isn't right.",
+    no_database: null, // the server explains
+    generic: "Something went wrong. Try again in a moment.",
+  };
+
+  function el(tag, props = {}, children = []) {
+    const node = Object.assign(document.createElement(tag), props);
+    for (const child of [].concat(children)) node.append(child);
+    return node;
+  }
+
+  function show(text, isError) {
+    $("status").textContent = text;
+    $("status").className = "message" + (isError ? " message--error" : "");
+    $("status").hidden = false;
+  }
+
+  function stat(value, label) {
+    return el("div", {}, [el("b", { textContent: value }), el("span", { textContent: label })]);
+  }
+
+  function render(chunks) {
+    $("chunks").replaceChildren();
+    $("summary").replaceChildren();
+    if (!chunks.length) {
+      $("summary").hidden = true;
+      show("The database is empty. Run the ingestion first: on GitHub, Actions › “Ingest the handbook”.", true);
+      return;
+    }
+    $("status").hidden = true;
+    const first = chunks[0];
+    const when = new Date(first.ingested_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+    $("summary").append(
+      stat(first.document_code, "document"),
+      stat(first.document_version, "version"),
+      stat(String(chunks.length), "chunks"),
+      stat(when, "ingested"),
+      stat(String(first.dimensions), `numbers per embedding (${first.embedding_model})`),
+    );
+    $("summary").hidden = false;
+
+    for (const chunk of chunks) {
+      const numbers = el("p", { className: "numbers" }, [
+        "Embedding: ",
+        ...chunk.first_numbers.map((n) => el("code", { textContent: n.toFixed(4) })),
+        ` … and ${chunk.dimensions - chunk.first_numbers.length} more`,
+      ]);
+      $("chunks").append(
+        el("li", { className: "chunk" }, [
+          el("div", { className: "chunk__head" }, [
+            el("span", { className: "chunk__number", textContent: `Chunk ${chunk.chunk}` }),
+            el("h2", { textContent: chunk.section }),
+            el("span", { className: "chunk__size", textContent: `${chunk.text.length} characters` }),
+          ]),
+          el("details", {}, [el("summary", { textContent: "Show the text" }), el("pre", { textContent: chunk.text })]),
+          numbers,
+        ]),
+      );
+    }
+  }
+
+  $("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    show("Loading the chunks…", false);
+    try {
+      const response = await fetch("/api/chunks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode: $("passcode").value }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        show(data.message || MESSAGES[data.error] || MESSAGES.generic, true);
+        return;
+      }
+      render(data.chunks || []);
+    } catch {
+      show(MESSAGES.generic, true);
+    }
+  });
+</script>
+</body>
+</html>

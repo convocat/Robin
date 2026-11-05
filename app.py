@@ -28,6 +28,7 @@ MAX_MESSAGES = int(os.getenv("MAX_MESSAGES_PER_CHAT", "40"))
 MAX_MESSAGE_LENGTH = 2000
 MAX_HISTORY_ITEMS = 2 * MAX_MESSAGES + 1
 INDEX_HTML = Path(__file__).parent / "public" / "index.html"
+CHUNKS_HTML = Path(__file__).parent / "public" / "chunks.html"
 
 
 def _error(code: str, status: int):
@@ -92,6 +93,27 @@ def feedback():
         return _error("generic", 500)
     finally:
         get_client().flush()
+
+
+@app.post("/api/chunks")
+def chunks():
+    """The chunks in the content database, for the 'Content database' page (behind the passcode)."""
+    data = request.get_json(silent=True) or {}
+    if COURSE_PASSCODE and data.get("passcode") != COURSE_PASSCODE:
+        return _error("passcode", 403)
+    try:
+        return jsonify({"chunks": robin.lookup.list_chunks()})
+    except robin.lookup.LookUpError as error:
+        return jsonify({"error": "no_database", "message": str(error)}), 503
+    except Exception:
+        log.exception("listing the chunks failed")
+        return _error("generic", 500)
+
+
+@app.get("/chunks")
+@app.get("/chunks.html")
+def chunks_page():
+    return send_file(CHUNKS_HTML)
 
 
 @app.get("/")

@@ -98,6 +98,8 @@ Each run shows up in Langfuse as the trace "Ingestion – customer handbook", in
 - `Look-up 1 – rewrite the question into a search query`: a small model turns the message, plus the conversation so far, into a search query (prompt `robin/query-rewrite`).
 - `Look-up 2 – search the content database`: the query becomes an embedding, and the database returns the closest chunks. Open it to see the query, the chunks found and how similar each one was (1 is the same meaning, 0 is unrelated), plus the handbook version and when it was ingested.
 
+**To see every chunk in the database,** open `/chunks` on Robin's site (for example `https://robin-xxxx.onrender.com/chunks`), or click "See the chunks in the content database" in the course panel. It shows each chunk's text and the first numbers of its embedding, behind the course passcode. The ingestion trace in Langfuse shows the chunks too, under step "3. Chunk".
+
 Robin then answers with those chunks in its system prompt (`robin/system-prompt-lookup`), and the facts check compares the answer with the same chunks (`robin/facts-check-lookup`). Every trace gets the tag `look-up: on` or `look-up: off`.
 
 #### Setting up the content database (once)

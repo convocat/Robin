@@ -173,6 +173,9 @@ def test_ingestion_and_search_with_a_real_database(monkeypatch):
     assert ingest_handbook.main(client=client) == len(lookup.split_into_chunks(prompts.HANDBOOK))
     hits = REAL_SEARCH(fake_embedding("return costs Belgium"), 2)
     assert hits[0].section == "Returns" and hits[0].document_version == "3.2"
+    listed = lookup.list_chunks()
+    assert len(listed) == len(lookup.split_into_chunks(prompts.HANDBOOK))
+    assert listed[0]["section"] == "Document information" and len(listed[0]["first_numbers"]) == 8
 
 
 def test_blocked_injection_skips_the_look_up():

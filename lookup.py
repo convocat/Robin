@@ -153,6 +153,31 @@ def search(query_embedding: list[float], limit: int) -> list[Hit]:
             for section, content, similarity, version, ingested_at in rows]
 
 
+def list_chunks(numbers: int = 8) -> list[dict]:
+    """Every chunk in the database, for the 'Content database' page: the text plus the first few
+    numbers of its embedding, to show that a chunk really is text plus numbers."""
+    try:
+        with connect() as conn:
+            rows = conn.execute(
+                f"SELECT chunk_number, section, content, document_code, document_version, ingested_at, "
+                f"embedding_model, vector_dims(embedding), embedding::text FROM {TABLE} "
+                f"ORDER BY document_code, chunk_number"
+            ).fetchall()
+    except LookUpError:
+        raise
+    except Exception as error:
+        if "does not exist" in str(error):
+            return []
+        raise
+    chunks = []
+    for number, section, content, code, version, ingested_at, model, dims, vector in rows:
+        first = [round(float(x), 4) for x in vector.strip("[]").split(",")[:numbers]]
+        chunks.append({"chunk": number, "section": section, "text": content, "document_code": code,
+                       "document_version": version, "ingested_at": ingested_at.isoformat(timespec="seconds"),
+                       "embedding_model": model, "dimensions": dims, "first_numbers": first})
+    return chunks
+
+
 # ---------------------------------------------------------------------------
 # Settings and formatting (used by Robin)
 # ---------------------------------------------------------------------------

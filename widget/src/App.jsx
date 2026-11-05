@@ -131,6 +131,11 @@ function CoursePanel({ settings, setSettings }) {
               </select>
               <small>How many handbook sections Robin gets for each question.</small>
             </label>
+            <p className="course__hint">
+              <a href="/chunks.html" target="_blank" rel="noopener">
+                See the chunks in the content database ↗
+              </a>
+            </p>
           </fieldset>
           {MOCK && <p className="course__mock">Preview: Robin's answers are scripted, and these settings have no effect yet.</p>}
         </div>
