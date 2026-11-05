@@ -11,11 +11,14 @@ from types import SimpleNamespace
 os.environ["LANGFUSE_TRACING_ENABLED"] = "false"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import pytest  # noqa: E402
+
 import lookup  # noqa: E402
 import prompts  # noqa: E402
 import robin  # noqa: E402
 
 DIMENSIONS = 256
+REAL_SEARCH = lookup.search
 
 
 def fake_embedding(text: str) -> list[float]:
@@ -56,8 +59,25 @@ class FakeClient:
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=text))])
 
 
-def setup_function():
-    lookup.INDEX.__init__()  # every test starts with an empty index
+class FakeDatabase:
+    """Stands in for the content database: the handbook's chunks with fake embeddings, searched in memory."""
+
+    def __init__(self):
+        self.rows = [(chunk, fake_embedding(chunk.text)) for chunk in lookup.split_into_chunks(prompts.HANDBOOK)]
+        self.searches = 0
+
+    def search(self, query_embedding, limit):
+        self.searches += 1
+        scored = sorted(((sum(a * b for a, b in zip(query_embedding, vector)), chunk) for chunk, vector in self.rows),
+                        key=lambda pair: pair[0], reverse=True)
+        return [lookup.Hit(chunk.section, chunk.text, score, "3.2", "2026-11-05") for score, chunk in scored[:limit]]
+
+
+@pytest.fixture(autouse=True)
+def database(monkeypatch):
+    fake = FakeDatabase()
+    monkeypatch.setattr(lookup, "search", fake.search)
+    return fake
 
 
 def robin_call(client):
@@ -116,12 +136,16 @@ def test_the_rewrite_sees_the_conversation_so_far():
     assert "Can I return it?" in rewrite["messages"][1]["content"]
 
 
-def test_handbook_is_embedded_once_then_reused():
+def test_robin_only_searches_the_database_and_never_embeds_the_handbook(database):
     client = FakeClient()
     robin.handle_turn("Belgium returns?", [], client=client, look_up=True)
-    robin.handle_turn("Delivery time?", [], client=client, look_up=True)
-    handbook_batches = [batch for batch in client.embedding_calls if len(batch) > 1]
-    assert len(handbook_batches) == 1  # the second turn only embeds its query
+    assert database.searches == 1
+    assert client.embedding_calls == [["return costs Belgium"]]  # only the search query
+
+
+def test_handbook_document_info_and_chunk_rule():
+    assert lookup.document_info(prompts.HANDBOOK) == ("CS-HB-001", "3.2")
+    assert lookup.max_results("7") == 3
 
 
 def test_a_failed_search_still_gives_an_answer():
@@ -130,6 +154,25 @@ def test_a_failed_search_still_gives_an_answer():
     assert result.outcome == "answered"
     assert "(The handbook could not be searched.)" in robin_call(client)["messages"][0]["content"]
     assert result.summary["sections_found"].startswith("ERROR")
+
+
+def test_no_database_gives_a_clear_reason(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(lookup, "search", REAL_SEARCH)
+    result = robin.handle_turn("Belgium returns?", [], client=FakeClient(), look_up=True)
+    assert "DATABASE_URL is not set" in result.summary["sections_found"]
+
+
+@pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="needs a Postgres database with pgvector")
+def test_ingestion_and_search_with_a_real_database(monkeypatch):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingestion"))
+    import ingest_handbook
+
+    monkeypatch.setenv("DATABASE_URL", os.environ["TEST_DATABASE_URL"])
+    client = FakeClient()
+    assert ingest_handbook.main(client=client) == len(lookup.split_into_chunks(prompts.HANDBOOK))
+    hits = REAL_SEARCH(fake_embedding("return costs Belgium"), 2)
+    assert hits[0].section == "Returns" and hits[0].document_version == "3.2"
 
 
 def test_blocked_injection_skips_the_look_up():

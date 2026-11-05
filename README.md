@@ -77,24 +77,39 @@ What changes:
 
 ### Look-up (RAG)
 
-Under **Look-up (RAG)** in the course panel, you can switch on **Look things up in the handbook**. Robin then works like a RAG bot: instead of the return policy in its system prompt, it searches the Nest & Co customer handbook (`content/handbook.md`) and answers from the sections it finds. **Max results** sets how many sections Robin gets for each question: 1, 3 or 5.
+Under **Look-up (RAG)** in the course panel, you can switch on **Look things up in the handbook**. Robin then works like a RAG bot: instead of the return policy in its system prompt, it searches the Nest & Co customer handbook in a **content database** and answers from the chunks it finds. **Max results** sets how many chunks Robin gets for each question: 1, 3 or 5.
 
 It's off by default, so Robin behaves as before until you switch it on.
 
-What happens, step by step (the same steps as the course slide "DocBot: from question to answer"):
+It works in two separate parts, like the course slide "DocBot: from question to answer":
 
-1. **Ingestion.** The handbook is cut into chunks, one per section, and each chunk is turned into an embedding: a list of numbers that captures its meaning. This happens once, the first time someone uses the look-up, and again whenever the handbook changes.
-2. **Question recognition.** A small model rewrites the customer's message, plus the conversation so far, into a search query (prompt `robin/query-rewrite`).
-3. **Information retrieval.** The query becomes an embedding too, and the sections closest in meaning are picked.
-4. **Response generation.** Robin answers with those sections in its system prompt (prompt `robin/system-prompt-lookup`). The facts check compares the answer with the same sections (prompt `robin/facts-check-lookup`).
+**The ingestion pipeline** (`ingestion/ingest_handbook.py`) puts the handbook into the database. It runs separately from Robin, whenever the handbook changes:
 
-In Langfuse, a turn with the look-up on shows two extra steps before `3. Robin writes the answer`: `Look-up 1 – rewrite the question into a search query` and `Look-up 2 – search the handbook`. Open the second one to see the query, the sections found and how similar each one was (1 is the same meaning, 0 is unrelated). Every trace gets the tag `look-up: on` or `look-up: off`.
+1. **Get the handbook:** the `production` version of the prompt `robin/handbook` in Langfuse. The handbook lives there like any other prompt, with its version history. (The starting version is `content/handbook.md`.)
+2. **Preprocess:** tidy the text.
+3. **Chunk:** cut it into chunks, one per section.
+4. **Embed:** turn every chunk into an embedding, a list of numbers that captures its meaning (OpenAI `text-embedding-3-small`).
+5. **Store:** replace the old chunks in the table `handbook_chunks` in the content database (Postgres with pgvector).
 
-**The handbook lives in Langfuse too,** as the prompt `robin/handbook`, so you can edit it like any other prompt and keep its version history. Save a new version with the `production` label, and Robin uses it within a minute. The embeddings are made again automatically.
+Each run shows up in Langfuse as the trace "Ingestion – customer handbook", in the environment `ingestion`.
 
-The embeddings use OpenAI's `text-embedding-3-small`. To use another embedding model, set the environment variable `EMBEDDING_MODEL`.
+**Robin's look-up** only searches the database. With the look-up on, a turn shows two extra steps before `3. Robin writes the answer`:
 
-## Run Robin on your own computer
+- `Look-up 1 – rewrite the question into a search query`: a small model turns the message, plus the conversation so far, into a search query (prompt `robin/query-rewrite`).
+- `Look-up 2 – search the content database`: the query becomes an embedding, and the database returns the closest chunks. Open it to see the query, the chunks found and how similar each one was (1 is the same meaning, 0 is unrelated), plus the handbook version and when it was ingested.
+
+Robin then answers with those chunks in its system prompt (`robin/system-prompt-lookup`), and the facts check compares the answer with the same chunks (`robin/facts-check-lookup`). Every trace gets the tag `look-up: on` or `look-up: off`.
+
+#### Setting up the content database (once)
+
+1. In the Render dashboard, click **New > Postgres**. Pick the same region as Robin (Frankfurt) and a paid plan, so the database doesn't expire. pgvector is included; the ingestion switches it on.
+2. In Robin's web service, under **Environment**, add `DATABASE_URL` with the database's **Internal Database URL** (from the database's **Info** page). Save; Render redeploys Robin.
+3. In GitHub, under **Settings > Secrets and variables > Actions**, add the secret `DATABASE_URL` with the database's **External Database URL**.
+4. Under **Actions > Ingest the handbook**, click **Run workflow**.
+
+Repeat step 4 after every change to the handbook in Langfuse: Robin only knows the version that was last ingested.
+
+## Run Robin on your own computer## Run Robin on your own computer
 
 You need Python 3.11 or newer.
 

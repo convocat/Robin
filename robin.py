@@ -15,7 +15,7 @@ With "Look things up" switched on in the course panel, Robin works like a RAG bo
 return policy, it gets the handbook sections that match the question. Two steps appear before step 3:
 
     ├── Look-up 1 – rewrite the question into a search query   (small model)
-    ├── Look-up 2 – search the handbook                        (embeddings, see lookup.py)
+    ├── Look-up 2 – search the content database                (embeddings, see lookup.py)
     │   └── Turn the search query into numbers (embedding)
 
 Each guardrail step carries its own score (`guardrail: ...`), so clicking a step shows its result on
@@ -185,7 +185,7 @@ STEPS = {
                 "what_it_does": "Turns the customer's message and the conversation so far into a search query."},
     "search": {"layer": "look-up (RAG)", "slide_step": "information retrieval",
                "uses_llm": "no: an embedding model turns text into numbers",
-               "what_it_does": "Finds the handbook sections whose meaning is closest to the search query.",
+               "what_it_does": "Finds the handbook chunks in the content database whose meaning is closest to the search query.",
                "if_it_fails": "Robin gets no sections, so it should say it doesn't know"},
 }
 
@@ -421,14 +421,12 @@ def _injection_step(client, langfuse, masked_message: str, injection_prompt: str
 
 def _look_up(client, langfuse, masked_message: str, history: list[dict], max_results: int,
              result: TurnResult) -> str:
-    """The look-up (RAG): rewrite the question into a search query, then search the handbook.
+    """The look-up (RAG): rewrite the question into a search query, then search the content database.
 
     Returns the handbook sections as text for Robin's system prompt. Two steps in the trace:
-    'Look-up 1' (a small model writes the query) and 'Look-up 2' (the search itself).
+    'Look-up 1' (a small model writes the query) and 'Look-up 2' (the search in the database).
+    The handbook gets into the database through the ingestion pipeline (ingestion/ingest_handbook.py).
     """
-    handbook, handbook_link = _text("robin/handbook")
-    handbook_version = getattr(handbook_link, "version", None) or "local file"
-
     # Look-up 1: question recognition. A small model turns the message (plus context) into a query.
     recent = history[-6:]
     conversation = "\n".join(f"{item['role']}: {item['content']}" for item in recent) or "(none)"
@@ -443,36 +441,35 @@ def _look_up(client, langfuse, masked_message: str, history: list[dict], max_res
         log.exception("query rewrite failed; searching with the customer's own words")
         query = ""
     query = query or masked_message
+    result.summary["search_query"] = query
 
-    # Look-up 2: information retrieval. The query becomes an embedding and is compared with every chunk.
+    # Look-up 2: information retrieval. The query becomes an embedding, and the content database
+    # returns the chunks whose embeddings are closest to it.
     with langfuse.start_as_current_observation(
-        as_type="retriever", name="Look-up 2 – search the handbook", input=query,
+        as_type="retriever", name="Look-up 2 – search the content database", input=query,
     ) as search:
         try:
-            embedded_now = lookup.INDEX.ensure(client, handbook)
             with langfuse.start_as_current_observation(
                 as_type="embedding", name="Turn the search query into numbers (embedding)",
                 model=lookup.EMBEDDING_MODEL, input=query,
             ) as embedding:
                 vectors, tokens = lookup.embed(client, [query])
                 embedding.update(output=f"{len(vectors[0])} numbers", usage_details={"input_tokens": tokens})
-            found = lookup.INDEX.search(vectors[0], max_results)
-            sections = [{"section": chunk.section, "similarity": round(score, 3), "text": chunk.text}
-                        for chunk, score in found]
+            hits = lookup.search(vectors[0], max_results)
+            sections = [{"section": hit.section, "similarity": round(hit.similarity, 3), "text": hit.text}
+                        for hit in hits]
             search.update(output=sections, metadata={
-                **STEPS["search"], "max_results": max_results, "handbook_version": str(handbook_version),
-                "handbook_chunks": len(lookup.INDEX.chunks), "embedding_model": lookup.EMBEDDING_MODEL,
-                "handbook_embedded_in_this_turn": "yes" if embedded_now else "no",
+                **STEPS["search"], "max_results": max_results, "embedding_model": lookup.EMBEDDING_MODEL,
+                "handbook_version": hits[0].document_version, "ingested_at": hits[0].ingested_at,
             })
-            sources = lookup.format_sources(found)
-            result.summary["search_query"] = query
+            sources = lookup.format_sources(hits)
             result.summary["sections_found"] = ", ".join(f"{s['section']} ({s['similarity']})" for s in sections)
         except Exception as error:
-            log.exception("handbook search failed")
-            search.update(level="ERROR", status_message=str(error), metadata=STEPS["search"])
+            log.exception("content database search failed")
+            reason = str(error) if isinstance(error, lookup.LookUpError) else f"The search failed: {error}"
+            search.update(level="ERROR", status_message=reason, metadata=STEPS["search"])
             sources = "(The handbook could not be searched.)"
-            result.summary["search_query"] = query
-            result.summary["sections_found"] = "ERROR: the search failed"
+            result.summary["sections_found"] = f"ERROR: {reason}"
     return sources
 
 
