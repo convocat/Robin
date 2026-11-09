@@ -60,6 +60,7 @@ Large items, such as sofas, cabinets and rugs over 2 metres, are delivered by ou
 ## Returns
 
 Return policy:
+
 - Customers can return products within 30 days of delivery.
 - Products must be unused and in their original packaging.
 - Made-to-measure products can't be returned.

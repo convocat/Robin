@@ -17,6 +17,7 @@ from flask import Flask, jsonify, request, send_file  # noqa: E402
 from langfuse import get_client  # noqa: E402
 from openai import OpenAI  # noqa: E402
 
+import help_pages  # noqa: E402
 import robin  # noqa: E402
 
 app = Flask(__name__)
@@ -115,6 +116,17 @@ def chunks():
 @app.get("/chunks.html")
 def chunks_page():
     return send_file(CHUNKS_HTML)
+
+
+@app.get("/help")
+def help_index():
+    return help_pages.index()
+
+
+@app.get("/help/<slug>")
+def help_page(slug):
+    page = help_pages.render(slug)
+    return page if page else ("Not found", 404)
 
 
 @app.get("/")
