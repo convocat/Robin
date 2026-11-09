@@ -26,6 +26,7 @@ def slugify(value: str, separator: str) -> str:
 
 CONTENT = Path(__file__).parent / "content"
 DOCUMENTS = {
+    "faq": ("Frequently asked questions", CONTENT / "faq.md"),
     "handbook": ("Customer handbook", CONTENT / "handbook.md"),
     "product-guide": ("Product guide", CONTENT / "product-guide.md"),
 }
@@ -62,6 +63,8 @@ PAGE = """<!doctype html>
   table {{ border-collapse:collapse; width:100%; margin:12px 0; font-size:15px; display:block; overflow-x:auto; }}
   th, td {{ border:1px solid var(--line); padding:6px 10px; text-align:left; vertical-align:top; background:var(--card); }}
   th {{ background:#e8ebe4; }}
+  h3 {{ font-size:19px; margin:24px 0 4px; }}
+  h3 + p {{ margin-top:0; }}
   em {{ color:var(--muted); }}
   hr {{ border:0; }}
 </style>

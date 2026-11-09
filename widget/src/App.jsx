@@ -220,7 +220,7 @@ export default function App() {
           <a href="#shop">Living</a>
           <a href="#shop">Lighting</a>
           <a href="#shop">Textiles</a>
-          <a href="#help">Help & returns</a>
+          <a href="/help/faq">Help & returns</a>
         </nav>
         <span className="basket" aria-label="Basket, 0 items">
           Basket <b>0</b>
