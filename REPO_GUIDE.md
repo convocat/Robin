@@ -157,7 +157,7 @@ Guardrails always use the `production` label. Only the system prompt follows a s
 | `render.yaml` / `vercel.json` | Instructions for the two hosting services |
 | `.github/workflows/` | Three button-press jobs on GitHub (see section 4) |
 | `tests/` | Automatic checks with a fake model (free to run) |
-| `.claude/skills/` | This repo's own Claude Code skills: `start-robin`, `robin-dashboard`, `robin-backlog`, `usecase-discovery` |
+| `.claude/skills/` | This repo's own Claude Code skills: `robin-start`, `robin-dashboard`, `robin-backlog`, `robin-usecase-discovery`, `robin-conversation-design-review`, `robin-test-case-generator`, `robin-trace-to-persona` |
 | `BACKLOG.md` / `HANDOVER.md` | Open work, and a snapshot of where things stand |
 | `.gitignore` | List of files Git must never upload (such as `.env` and `dashboard-data.json`) |
 
@@ -213,7 +213,7 @@ Type these in a terminal opened in the repo folder, or simply ask Claude Code to
 
 | Command | What it does |
 |---|---|
-| `/start-robin` (in Claude Code) | Starts Robin locally; open http://127.0.0.1:3000 |
+| `/robin-start` (in Claude Code) | Starts Robin locally; open http://127.0.0.1:3000 |
 | `/robin-dashboard` (in Claude Code) | Refreshes and opens the PO/CxD dashboard |
 | `python app.py` | Starts Robin locally by hand |
 | `python -m pytest tests` | Runs all automatic tests (free: uses a fake model) |

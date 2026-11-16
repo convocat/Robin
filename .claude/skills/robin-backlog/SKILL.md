@@ -20,7 +20,7 @@ targeted — don't rewrite the whole file for a one-line change.
 - **"Add to the backlog"** — append one bullet under Open, written the way the existing bullets
   are written (bold lead-in, then one or two sentences of why/what). Don't invent urgency or
   priority that wasn't stated.
-- **A settled use case from `usecase-discovery`** — one bullet, naming the build task, pointing
+- **A settled use case from `robin-usecase-discovery`** — one bullet, naming the build task, pointing
   at its doc: `**<task>.** See `discovery/<slug>.md` for the settled design.` Don't copy the
   analysis into the backlog line; the doc is the source of truth, the backlog line is just a
   pointer to it.

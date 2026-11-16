@@ -39,11 +39,11 @@ None of these need this dashboard or even this project — they work in any Clau
 Packaged versions of the use cases above, so they're one slash command instead of a fresh prompt
 each time:
 
-- `conversation-design-review` — paste a flow or system prompt, get a structured critique
+- `robin-conversation-design-review` — paste a flow or system prompt, get a structured critique
   (clarity, repair, one-question-at-a-time, tone).
-- `test-case-generator` — given a system prompt + a policy doc, generate test items shaped like
-  Robin's `experiments/robin-dataset.json` (regular / edge case / attack / multi-language).
-- `trace-to-persona` — pull real Langfuse conversations and summarize recurring user
+- `robin-test-case-generator` — given a system prompt + a policy doc, generate test items shaped
+  like Robin's `experiments/robin-dataset.json` (regular / edge case / attack / multi-language).
+- `robin-trace-to-persona` — pull real Langfuse conversations and summarize recurring user
   personas/intents for a content manager.
 
 ## What's live right now, for the demo

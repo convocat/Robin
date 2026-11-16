@@ -1,9 +1,9 @@
 ---
-name: start-robin
-description: "Start Robin (the chatbot) locally on this machine: checks the .venv and .env, installs requirements if needed, starts app.py in the background and confirms it answers on http://127.0.0.1:3000. Triggers: '/start-robin', 'start Robin', 'start Robin locally', 'run Robin', 'run Robin locally', 'launch Robin'."
+name: robin-start
+description: "Start Robin (the chatbot) locally on this machine: checks the .venv and .env, installs requirements if needed, starts app.py in the background and confirms it answers on http://127.0.0.1:3000. Triggers: '/robin-start', 'start Robin', 'start Robin locally', 'run Robin', 'run Robin locally', 'launch Robin'."
 ---
 
-# start-robin — run Robin on this computer
+# robin-start — run Robin on this computer
 
 When invoked, get Robin running at http://127.0.0.1:3000 without Maaike touching the CLI herself.
 

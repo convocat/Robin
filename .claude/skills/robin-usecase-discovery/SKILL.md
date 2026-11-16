@@ -1,9 +1,9 @@
 ---
-name: usecase-discovery
-description: "Co-design a use case with Maaike before any build starts: she calls this explicitly when she has a new idea, and it turns the conversation into a structured discovery doc (problem, current process, human/rule/GenAI split, open questions) that both of us keep refining across turns — not Claude investigating alone and firing questions back. Based on Maaike's five-step GenAI design process (Define problem -> Map current process -> Identify AI potential), run as a guided back-and-forth instead of a report. Only called deliberately: '/usecase-discovery', 'let's design this', 'use case discovery', 'let's think this through before we build it'."
+name: robin-usecase-discovery
+description: "Co-design a use case with Maaike before any build starts: she calls this explicitly when she has a new idea, and it turns the conversation into a structured discovery doc (problem, current process, human/rule/GenAI split, open questions) that both of us keep refining across turns — not Claude investigating alone and firing questions back. Based on Maaike's five-step GenAI design process (Define problem -> Map current process -> Identify AI potential), run as a guided back-and-forth instead of a report. Only called deliberately: '/robin-usecase-discovery', 'let's design this', 'use case discovery', 'let's think this through before we build it'."
 ---
 
-# usecase-discovery — co-design a use case before building it
+# robin-usecase-discovery — co-design a use case before building it
 
 This is **not** a gate that fires automatically before every build request, and it is **not**
 Claude going off to inspect the codebase and reporting back findings and questions. Maaike calls
