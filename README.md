@@ -235,6 +235,8 @@ These are deliberate, so participants can find and improve them:
 
 ## Files
 
+New to the code? [`REPO_GUIDE.md`](REPO_GUIDE.md) is a fuller map of the repo, written for conversation designers: where each part lives, where to change what, and the code words explained.
+
 | File | What it does |
 | --- | --- |
 | `app.py` | Robin's API: `/api/chat` and `/api/feedback`. Also serves the chat page |
