@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robin — Nest &amp; Co Chatbot Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  /* ===== shadcn/ui Design Tokens =====
+     Component mapping:
+     - .kpi-card         → shadcn Card
+     - .tab / .tab-bar   → shadcn Tabs
+     - .section-nav      → shadcn NavigationMenu (vertical)
+     - .preset-btn       → shadcn ToggleGroup
+     - .log-table        → shadcn DataTable (TanStack)
+     - .log-controls input  → shadcn Input
+     - .log-controls select → shadcn Select
+     - .badge            → shadcn Badge
+     - .modal / .modal-overlay → shadcn Sheet / Dialog
+     - .info-box         → shadcn Alert
+     - .pagination       → shadcn Pagination
+     - input[type=date]  → shadcn DatePickerWithRange
+     - input[type=checkbox] → shadcn Checkbox
+     - .chart-card       → shadcn Card + Recharts
+     - .topic-table      → shadcn Table
+     - .feedback-table   → shadcn Table
+  ===== */
+  :root {
+    /* shadcn/ui slate palette (hsl-based) */
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(222.2 84% 4.9%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(222.2 84% 4.9%);
+    --primary: hsl(221.2 83.2% 53.3%);
+    --primary-foreground: hsl(210 40% 98%);
+    --secondary: hsl(210 40% 96.1%);
+    --secondary-foreground: hsl(222.2 47.4% 11.2%);
+    --muted: hsl(210 40% 96.1%);
+    --muted-foreground: hsl(215.4 16.3% 46.9%);
+    --accent: hsl(210 40% 96.1%);
+    --accent-foreground: hsl(222.2 47.4% 11.2%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --border: hsl(214.3 31.8% 91.4%);
+    --input: hsl(214.3 31.8% 91.4%);
+    --ring: hsl(221.2 83.2% 53.3%);
+    --radius: 0.5rem;
+    /* Semantic aliases for existing code */
+    --bg: hsl(210 40% 98%);
+    --primary-light: hsl(213.8 100% 95%);
+    --warning: hsl(38 92% 50%);
+    --danger: hsl(0 84.2% 60.2%);
+    --text: hsl(222.2 84% 4.9%);
+    --text-light: hsl(215.4 16.3% 46.9%);
+    --shadow: none; /* shadcn uses borders, not shadows */
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; font-feature-settings: "rlig" 1, "calt" 1; -webkit-font-smoothing: antialiased; }
+
+  /* Header */
+  .header { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: white; padding: 20px 32px; display: flex; align-items: center; gap: 16px; }
+  .header h1 { font-size: 1.5rem; font-weight: 600; }
+  .header .subtitle { opacity: 0.8; font-size: 0.9rem; }
+  .header .logo { width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+
+  /* Tabs → shadcn Tabs */
+  .tab-bar { display: flex; background: var(--card); border-bottom: 1px solid var(--border); padding: 0 32px; position: sticky; top: 0; z-index: 100; }
+  .tab { padding: 12px 20px; cursor: pointer; font-weight: 500; color: var(--text-light); border-bottom: 2px solid transparent; transition: all 0.15s; font-size: 0.875rem; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text); border-bottom-color: hsl(221.2 83.2% 53.3%); }
+
+  /* Global date filter bar → shadcn ToggleGroup + DatePickerWithRange */
+  .date-filter-bar { background: var(--card); border-bottom: 1px solid var(--border); padding: 10px 32px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: sticky; top: 48px; z-index: 99; }
+  .date-filter-bar .filter-label { font-size: 0.8125rem; font-weight: 500; color: var(--text-light); margin-right: 4px; }
+  .date-filter-bar .preset-btn { padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: transparent; cursor: pointer; font-size: 0.8125rem; color: var(--text); transition: all 0.15s; font-weight: 500; }
+  .date-filter-bar .preset-btn:hover { background: var(--accent); color: var(--text); }
+  .date-filter-bar .preset-btn.active { background: var(--text); color: var(--card); border-color: var(--text); }
+  .date-filter-bar .date-sep { color: var(--text-light); font-size: 0.8125rem; }
+  .date-filter-bar input[type="date"] { padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.8125rem; background: transparent; }
+  .date-filter-bar input[type="date"]:focus { outline: 2px solid var(--ring); outline-offset: -1px; }
+  .date-filter-bar .active-range { font-size: 0.8125rem; color: var(--text); font-weight: 500; margin-left: auto; background: var(--muted); padding: 4px 12px; border-radius: var(--radius); }
+
+  /* Content */
+  .content { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+  .tab-content { display: none; }
+  .tab-content.active { display: flex; gap: 24px; }
+  .tab-content.no-sidebar.active { display: block; }
+
+  /* Section navigation → shadcn NavigationMenu (vertical) */
+  .section-nav { position: sticky; top: 120px; min-width: 180px; max-width: 180px; align-self: flex-start; background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); padding: 8px 0; }
+  .section-nav a { display: block; padding: 6px 16px; font-size: 0.8125rem; color: var(--text-light); text-decoration: none; border-left: 2px solid transparent; transition: all 0.15s; }
+  .section-nav a:hover { color: var(--text); background: var(--accent); }
+  .section-nav a.active { color: var(--text); border-left-color: hsl(221.2 83.2% 53.3%); font-weight: 500; background: var(--accent); }
+  .section-nav .nav-title { padding: 8px 16px 4px; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); }
+  .tab-main { flex: 1; min-width: 0; }
+
+  /* KPI Cards → shadcn Card */
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .kpi-card { background: var(--card); border-radius: var(--radius); padding: 24px; border: 1px solid var(--border); border-left: 4px solid hsl(221.2 83.2% 53.3%); }
+  .kpi-card.green { border-left-color: hsl(142.1 76.2% 36.3%); }
+  .kpi-card.yellow { border-left-color: var(--warning); }
+  .kpi-card.red { border-left-color: var(--destructive); }
+  .kpi-value { font-size: 2rem; font-weight: 700; color: var(--text); letter-spacing: -0.025em; }
+  .kpi-label { font-size: 0.875rem; color: var(--text-light); margin-top: 4px; }
+  .kpi-sub { font-size: 0.75rem; color: var(--text-light); margin-top: 2px; }
+
+  /* Charts → shadcn Card + Recharts */
+  .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .chart-card { background: var(--card); border-radius: var(--radius); padding: 24px; border: 1px solid var(--border); }
+  .chart-card h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+  .chart-card canvas { max-height: 300px; }
+  .chart-card.full { grid-column: 1 / -1; }
+
+  /* Conversation Log → shadcn Input, Select, Checkbox */
+  .log-controls { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .log-controls input, .log-controls select { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.875rem; background: transparent; transition: border-color 0.15s; }
+  .log-controls input:focus, .log-controls select:focus { outline: 2px solid var(--ring); outline-offset: -1px; border-color: transparent; }
+  .log-controls input[type="text"] { min-width: 280px; }
+  .log-controls select { min-width: 160px; }
+  .log-controls label { font-size: 0.8125rem; color: var(--text-light); display: flex; align-items: center; gap: 6px; }
+  .log-count { font-size: 0.8125rem; color: var(--text-light); margin-left: auto; }
+
+  /* Conversation log table → shadcn DataTable */
+  .log-table-wrap { max-height: 70vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+  .log-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+  .log-table th { background: var(--muted); font-weight: 500; padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; white-space: nowrap; color: var(--text-light); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.025em; }
+  .log-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .log-table tr { cursor: pointer; transition: background 0.1s; }
+  .log-table tbody tr:hover { background: var(--muted); }
+  .log-table tr.error td:first-child { box-shadow: inset 3px 0 0 var(--destructive); }
+  .log-table tr.has-feedback td:first-child { box-shadow: inset 3px 0 0 hsl(142.1 76.2% 36.3%); }
+  .log-table .td-date { white-space: nowrap; color: var(--text-light); font-size: 0.75rem; min-width: 110px; }
+  /* Badges → shadcn Badge */
+  .log-table .badge { background: var(--secondary); color: var(--secondary-foreground); padding: 2px 8px; border-radius: 9999px; font-weight: 500; font-size: 0.6875rem; white-space: nowrap; border: 1px solid transparent; }
+  .log-table .badge.err { background: hsl(0 84.2% 95%); color: var(--destructive); border-color: hsl(0 84.2% 85%); }
+  .log-table .badge.fb { background: hsl(142.1 76.2% 94%); color: hsl(142.1 76.2% 26%); border-color: hsl(142.1 76.2% 84%); }
+  .log-table .dash { color: var(--text-light); }
+  .log-table .td-turns { text-align: center; color: var(--text-light); }
+  .log-table .td-preview { color: var(--text); max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log-table .td-fout, .log-table .td-feedback { white-space: nowrap; }
+  .log-table .td-check { width: 30px; text-align: center; }
+  .log-table .td-check input { cursor: pointer; width: 15px; height: 15px; }
+  .log-table .td-status { width: 20px; }
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 9999px; }
+  .topic-dot { display: inline-block; width: 7px; height: 7px; border-radius: 9999px; margin-right: 6px; }
+  .log-table tr.selected { background: #eff6ff; }
+
+  /* Selection bar → shadcn Toolbar */
+  .selection-bar { display: none; background: var(--text); color: var(--card); padding: 10px 18px; border-radius: var(--radius); margin-bottom: 12px; font-size: 0.8125rem; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .selection-bar.visible { display: flex; }
+  .selection-bar strong { font-size: 0.875rem; }
+  .selection-bar .sel-stat { background: hsla(0 0% 100% / 0.15); padding: 3px 10px; border-radius: var(--radius); font-size: 0.75rem; }
+  .selection-bar button { background: hsla(0 0% 100% / 0.15); border: 1px solid hsla(0 0% 100% / 0.2); color: white; padding: 5px 14px; border-radius: var(--radius); cursor: pointer; font-size: 0.8125rem; font-weight: 500; transition: background 0.15s; }
+  .selection-bar button:hover { background: hsla(0 0% 100% / 0.25); }
+
+  /* Conversation detail: expands inline below its row, rendered by thread-view/ (@assistant-ui/react) */
+  .log-table tr.expanded { background: var(--muted); }
+  .conv-detail-row td { padding: 0; border-bottom: 1px solid var(--border); background: var(--card); cursor: default; }
+  .conv-detail { padding: 12px 16px; }
+  .conv-detail-meta { margin-bottom: 8px; font-size: 0.8125rem; color: var(--text-light); }
+  .conv-detail-frame { width: 100%; height: min(70vh, 520px); border: 1px solid var(--border); border-radius: var(--radius); background: #f8fafc; }
+
+  /* Feedback table → shadcn Table */
+  .feedback-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+  .feedback-table th, .feedback-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  .feedback-table th { background: var(--muted); font-weight: 500; position: sticky; top: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.025em; color: var(--text-light); }
+  .feedback-table tr:hover { background: var(--muted); }
+  .feedback-scroll { max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+
+  /* Info boxes → shadcn Alert */
+  .info-box { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 20px; }
+  .info-box h4 { color: var(--text); font-size: 0.875rem; font-weight: 600; margin-bottom: 4px; }
+  .info-box p { font-size: 0.8125rem; color: var(--text-light); line-height: 1.6; }
+
+  /* Pagination → shadcn Pagination */
+  .pagination { display: flex; gap: 4px; justify-content: center; margin-top: 16px; align-items: center; }
+  .pagination button { padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: transparent; cursor: pointer; font-size: 0.8125rem; font-weight: 500; transition: all 0.15s; }
+  .pagination button:hover { background: var(--accent); }
+  .pagination button.active { background: var(--text); color: var(--card); border-color: var(--text); }
+  .pagination span { font-size: 0.8125rem; color: var(--text-light); }
+
+  /* Loading */
+  .loading { text-align: center; padding: 80px 20px; }
+  .loading .spinner { width: 48px; height: 48px; border: 4px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Section headings */
+  .section-title { font-size: 1rem; font-weight: 600; margin: 24px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .po-section { scroll-margin-top: 120px; margin-bottom: 32px; }
+  .po-section h2 { font-size: 1.125rem; font-weight: 600; margin-bottom: 16px; color: var(--text); display: flex; align-items: center; gap: 8px; letter-spacing: -0.015em; }
+  .po-section h2 .section-icon { font-size: 1rem; }
+
+  /* Topic performance table → shadcn Table */
+  .topic-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; background: var(--card); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+  .topic-table th { background: var(--muted); font-weight: 500; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.025em; color: var(--text-light); }
+  .topic-table td { padding: 8px 14px; border-bottom: 1px solid var(--border); }
+  .topic-table tr:hover { background: var(--muted); }
+  .topic-table .bar-cell { position: relative; min-width: 120px; }
+  .topic-table .bar-bg { position: absolute; top: 4px; left: 0; bottom: 4px; border-radius: 4px; opacity: 0.15; }
+  .topic-table .bar-fill { position: absolute; top: 4px; left: 0; bottom: 4px; border-radius: 4px; opacity: 0.35; }
+  .topic-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .content { padding: 16px; }
+    .chart-grid { grid-template-columns: 1fr; }
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .tab { padding: 10px 14px; font-size: 0.85rem; }
+    .date-filter-bar { padding: 10px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">M</div>
+  <div>
+    <h1>Robin — Nest &amp; Co Chatbot Analytics</h1>
+    <div class="subtitle">Interactief dashboard voor chatbotprestaties</div>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <div class="tab active" data-tab="po">Product Owner</div>
+  <div class="tab" data-tab="cm">Contentmanager</div>
+  <div class="tab" data-tab="tech">Technisch Beheer</div>
+  <div class="tab" data-tab="log">Gesprekslogboek</div>
+</div>
+
+<div class="date-filter-bar">
+  <span class="filter-label">Periode:</span>
+  <button class="preset-btn active" data-preset="all">Alles</button>
+  <button class="preset-btn" data-preset="yesterday">Gisteren</button>
+  <button class="preset-btn" data-preset="wtd">Week tot nu toe</button>
+  <button class="preset-btn" data-preset="lastweek">Laatste volledige week</button>
+  <button class="preset-btn" data-preset="month">Deze maand</button>
+  <button class="preset-btn" data-preset="custom">Custom</button>
+  <input type="date" id="global-date-from" style="display:none">
+  <span class="date-sep" id="date-sep" style="display:none">t/m</span>
+  <input type="date" id="global-date-to" style="display:none">
+  <label style="margin-left:12px;font-size:0.82rem;color:var(--text-light);display:flex;align-items:center;gap:4px"><input type="checkbox" id="exclude-testers"> Testgesprekken verbergen</label>
+  <span class="active-range" id="active-range-label"></span>
+</div>
+
+<div class="content">
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Data laden...</p>
+  </div>
+
+  <!-- ========== PRODUCT OWNER ========== -->
+  <div id="tab-po" class="tab-content">
+    <nav class="section-nav" id="po-nav">
+      <div class="nav-title">Product Owner</div>
+      <a href="#po-overzicht" class="active">Overzicht</a>
+      <a href="#po-bereikbaarheid">Bereikbaarheid</a>
+      <a href="#po-effectiviteit">Effectiviteit</a>
+      <a href="#po-trends">Trends</a>
+      <a href="#po-onderwerpen">Onderwerpen</a>
+      <a href="#po-tevredenheid">Tevredenheid</a>
+    </nav>
+    <div class="tab-main">
+      <div class="info-box">
+        <h4>Dashboard voor de Product Owner</h4>
+        <p>Focus: adoptie, waarde voor de organisatie en bereik van Robin. Doel: inzicht in gesprekskwaliteit voor de Maven-cursus.</p>
+      </div>
+
+      <div id="po-overzicht" class="po-section">
+        <h2><span class="section-icon">&#128202;</span> Overzicht</h2>
+        <div class="kpi-row" id="po-kpis"></div>
+      </div>
+
+      <div id="po-bereikbaarheid" class="po-section">
+        <h2><span class="section-icon">&#128336;</span> Bereikbaarheid</h2>
+        <div class="kpi-row" id="po-bereik-kpis"></div>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>Gesprekken per dagdeel (CET)</h3><canvas id="chart-hourly"></canvas></div>
+          <div class="chart-card"><h3>Gesprekken per weekdag</h3><canvas id="chart-dow"></canvas></div>
+        </div>
+      </div>
+
+      <div id="po-effectiviteit" class="po-section">
+        <h2><span class="section-icon">&#9989;</span> Effectiviteit</h2>
+        <div class="info-box" style="margin-bottom:16px">
+          <p id="effectiveness-info"></p>
+        </div>
+        <div class="kpi-row" id="po-effectiveness"></div>
+      </div>
+
+      <div id="po-trends" class="po-section">
+        <h2><span class="section-icon">&#128200;</span> Trends</h2>
+        <div class="chart-grid">
+          <div class="chart-card full"><h3>Gesprekken per maand</h3><canvas id="chart-monthly"></canvas></div>
+        </div>
+      </div>
+
+      <div id="po-onderwerpen" class="po-section">
+        <h2><span class="section-icon">&#128218;</span> Onderwerpen</h2>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>Top onderwerpen</h3><canvas id="chart-topics"></canvas></div>
+          <div class="chart-card"><h3>Single-turn vs. multi-turn</h3><canvas id="chart-turns"></canvas></div>
+        </div>
+        <h3 style="margin:20px 0 12px;font-size:1rem;">Prestaties per onderwerp</h3>
+        <div id="po-topic-table"></div>
+      </div>
+
+      <div id="po-tevredenheid" class="po-section">
+        <h2><span class="section-icon">&#11088;</span> Tevredenheid</h2>
+        <div class="info-box" id="bsat-info">
+          <h4>BSAT — Bot Satisfaction Score</h4>
+          <p id="bsat-info-text"></p>
+        </div>
+        <div class="kpi-row" id="po-bsat"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== CONTENTMANAGER ========== -->
+  <div id="tab-cm" class="tab-content">
+    <nav class="section-nav">
+      <div class="nav-title">Contentmanager</div>
+      <a href="#cm-kpi-section" class="active">Overzicht</a>
+      <a href="#cm-gesprekken">Gespreksduur</a>
+      <a href="#cm-content-gaps">Content gaps</a>
+      <a href="#cm-feedback">Feedback</a>
+      <a href="#cm-fouten">Fouten</a>
+    </nav>
+    <div class="tab-main">
+      <div class="info-box">
+        <h4>Dashboard voor de Contentmanager / Conversation Designer</h4>
+        <p>Focus: kwaliteit van antwoorden, content gaps, en verbeterpunten voor de kennisbank.</p>
+      </div>
+      <div id="cm-kpi-section" class="po-section">
+        <div class="kpi-row" id="cm-kpis"></div>
+      </div>
+      <div id="cm-gesprekken" class="po-section">
+        <h2>Gespreksduur</h2>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>Gespreksduur (aantal vragen per sessie)</h3><canvas id="chart-convlength"></canvas></div>
+        </div>
+      </div>
+      <div id="cm-content-gaps" class="po-section">
+        <h2>Content gaps & onderwerpen</h2>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>Onderwerpen met meeste "Overig" (mogelijke content gaps)</h3><canvas id="chart-topics-cm"></canvas></div>
+          <div class="chart-card full"><h3>Onderwerpen over tijd</h3><canvas id="chart-topics-trend"></canvas></div>
+        </div>
+      </div>
+      <div id="cm-feedback" class="po-section">
+        <h3 class="section-title">Gebruikersfeedback (<span id="fb-count"></span> berichten)</h3>
+        <div class="feedback-scroll">
+          <table class="feedback-table" id="feedback-table">
+            <thead><tr><th>Datum</th><th>Feedback</th><th>Bekijk</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="cm-fouten" class="po-section">
+        <h3 class="section-title" style="margin-top:32px">Gesprekken met foutieve antwoorden (lege responses)</h3>
+        <div class="feedback-scroll">
+          <table class="log-table" id="error-table">
+            <thead><tr><th>Datum</th><th>Onderwerp</th><th>Eerste vraag</th></tr></thead>
+            <tbody id="error-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== TECHNISCH BEHEER ========== -->
+  <div id="tab-tech" class="tab-content">
+    <nav class="section-nav">
+      <div class="nav-title">Technisch Beheer</div>
+      <a href="#tech-kpi-section" class="active">Overzicht</a>
+      <a href="#tech-belasting">Belasting</a>
+      <a href="#tech-fouten">Fouten</a>
+      <a href="#tech-responses">Responses</a>
+    </nav>
+    <div class="tab-main">
+      <div class="info-box">
+        <h4>Dashboard voor Technisch Beheer</h4>
+        <p>Focus: stabiliteit, fouten, belasting en systeemprestaties.</p>
+      </div>
+      <div id="tech-kpi-section" class="po-section">
+        <div class="kpi-row" id="tech-kpis"></div>
+      </div>
+      <div id="tech-belasting" class="po-section">
+        <h2>Belasting</h2>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>Belasting per uur (CET)</h3><canvas id="chart-hourly-tech"></canvas></div>
+          <div class="chart-card"><h3>Gesprekken per maand (trend)</h3><canvas id="chart-monthly-tech"></canvas></div>
+        </div>
+      </div>
+      <div id="tech-fouten" class="po-section">
+        <h2>Fouten</h2>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>Fouten per maand</h3><canvas id="chart-errors-monthly"></canvas></div>
+        </div>
+      </div>
+      <div id="tech-responses" class="po-section">
+        <h2>Responses</h2>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>Antwoordlengte verdeling</h3><canvas id="chart-response-length"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== GESPREKSLOGBOEK ========== -->
+  <div id="tab-log" class="tab-content no-sidebar">
+    <div class="info-box">
+      <h4>Volledig gesprekslogboek</h4>
+      <p>Doorzoek en filter alle <span id="total-convos-log"></span> gesprekken. Klik op een gesprek om het volledige verloop te bekijken.</p>
+    </div>
+    <div class="log-controls">
+      <input type="text" id="log-search" placeholder="Zoek in gesprekken...">
+      <select id="log-topic"><option value="">Alle onderwerpen</option></select>
+      <label><input type="checkbox" id="log-errors-only"> Alleen fouten</label>
+      <label><input type="checkbox" id="log-feedback-only"> Alleen met feedback</label>
+      <span class="log-count" id="log-count"></span>
+    </div>
+    <div class="selection-bar" id="selection-bar">
+      <strong><span id="sel-count">0</span> geselecteerd</strong>
+      <span class="sel-stat" id="sel-topics"></span>
+      <span class="sel-stat" id="sel-turns"></span>
+      <span class="sel-stat" id="sel-errors"></span>
+      <button onclick="exportSelection()">Exporteer selectie (CSV)</button>
+      <button onclick="clearSelection()">Wis selectie</button>
+    </div>
+    <div class="log-table-wrap">
+      <table class="log-table" id="conv-table">
+        <thead>
+          <tr>
+            <th class="td-check"><input type="checkbox" id="select-all" title="Selecteer alles op pagina"></th>
+            <th class="td-status"></th>
+            <th>Datum</th>
+            <th>Onderwerp</th>
+            <th>Vragen</th>
+            <th>Eerste vraag</th>
+            <th>Fout</th>
+            <th>Feedback</th>
+          </tr>
+        </thead>
+        <tbody id="conv-tbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+
+<script>
+let DATA = null;
+const PAGE_SIZE = 100;
+let currentPage = 0;
+let filteredConvos = [];
+const selectedConvos = new Set();
+const charts = {}; // store chart instances for destroy/rebuild
+let globalDateFrom = null;
+let globalDateTo = null;
+
+// Load data
+fetch('dashboard-data.json')
+  .then(r => r.json())
+  .then(d => { DATA = d; init(); })
+  .catch(e => {
+    document.getElementById('loading').innerHTML = '<p style="color:red">Fout bij laden data: ' + e.message + '<br>Zorg dat dashboard-data.json in dezelfde map staat.</p>';
+  });
+
+function init() {
+  document.getElementById('loading').style.display = 'none';
+  document.querySelectorAll('.tab-content').forEach(el => el.style.display = '');
+  document.getElementById('tab-po').classList.add('active');
+
+  initTabs();
+  initDateFilter();
+  rebuildAll();
+}
+
+// ========== DATE FILTER ==========
+function initDateFilter() {
+  const presets = document.querySelectorAll('.preset-btn');
+  const fromInput = document.getElementById('global-date-from');
+  const toInput = document.getElementById('global-date-to');
+  const sep = document.getElementById('date-sep');
+
+  presets.forEach(btn => {
+    btn.addEventListener('click', () => {
+      presets.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const preset = btn.dataset.preset;
+      const showCustom = preset === 'custom';
+      fromInput.style.display = showCustom ? '' : 'none';
+      toInput.style.display = showCustom ? '' : 'none';
+      sep.style.display = showCustom ? '' : 'none';
+
+      if (preset === 'custom') {
+        // Use current custom values or default to last 30 days
+        if (!fromInput.value) {
+          const d = new Date();
+          d.setDate(d.getDate() - 30);
+          fromInput.value = toISODate(d);
+          toInput.value = toISODate(new Date());
+        }
+        globalDateFrom = fromInput.value;
+        globalDateTo = toInput.value;
+      } else {
+        const range = getPresetRange(preset);
+        globalDateFrom = range.from;
+        globalDateTo = range.to;
+      }
+      rebuildAll();
+    });
+  });
+
+  fromInput.addEventListener('change', () => {
+    globalDateFrom = fromInput.value;
+    rebuildAll();
+  });
+  toInput.addEventListener('change', () => {
+    globalDateTo = toInput.value;
+    rebuildAll();
+  });
+
+  // Tester filter
+  document.getElementById('exclude-testers').addEventListener('change', () => rebuildAll());
+
+  // Set initial date bounds on date pickers
+  const firstDate = DATA.convLog.reduce((min, c) => c.time && c.time < min ? c.time : min, 'Z').substring(0, 10);
+  const lastDate = DATA.convLog.reduce((max, c) => c.time && c.time > max ? c.time : max, '').substring(0, 10);
+  fromInput.min = firstDate;
+  fromInput.max = lastDate;
+  toInput.min = firstDate;
+  toInput.max = lastDate;
+}
+
+function getPresetRange(preset) {
+  // Use actual current date so filters reflect real time
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+
+  switch (preset) {
+    case 'all':
+      return { from: null, to: null };
+    case 'yesterday': {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 1);
+      const ds = toISODate(d);
+      return { from: ds, to: ds };
+    }
+    case 'wtd': { // week to date (maandag t/m vandaag)
+      const d = new Date(today);
+      const day = d.getDay(); // 0=sun
+      const diff = day === 0 ? 6 : day - 1; // days since monday
+      d.setDate(d.getDate() - diff);
+      return { from: toISODate(d), to: toISODate(today) };
+    }
+    case 'lastweek': { // last complete week (ma-zo)
+      const d = new Date(today);
+      const day = d.getDay();
+      const diff = day === 0 ? 6 : day - 1;
+      d.setDate(d.getDate() - diff - 7); // last monday
+      const end = new Date(d);
+      end.setDate(end.getDate() + 6); // last sunday
+      return { from: toISODate(d), to: toISODate(end) };
+    }
+    case 'month': { // current month
+      const from = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { from: toISODate(from), to: toISODate(today) };
+    }
+    default:
+      return { from: null, to: null };
+  }
+}
+
+function toISODate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function getFilteredConvLog() {
+  const excludeTesters = document.getElementById('exclude-testers').checked;
+  return DATA.convLog.filter(c => {
+    if (excludeTesters && c.isTester) return false;
+    if (globalDateFrom || globalDateTo) {
+      if (!c.time) return false;
+      const d = c.time.substring(0, 10);
+      if (globalDateFrom && d < globalDateFrom) return false;
+      if (globalDateTo && d > globalDateTo) return false;
+    }
+    return true;
+  });
+}
+
+function computeMetrics(convos) {
+  const m = {};
+  m.totalConversations = convos.length;
+  m.totalMessages = 0;
+  m.totalUserMessages = 0;
+  m.monthly = {};
+  m.hourly = new Array(24).fill(0);
+  m.dow = new Array(7).fill(0);
+  m.dowLabels = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
+  m.topicCounts = {};
+  m.lengthDist = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6-10': 0, '11+': 0 };
+  m.singleTurn = 0;
+  m.multiTurn = 0;
+  m.errorConvos = 0;
+  m.emptyResponses = 0;
+  m.feedbacks = [];
+  m.feedbackCount = 0;
+  m.convosWithFeedback = 0;
+  m.thumbsPositive = 0;
+  m.thumbsNegative = 0;
+  m.rephraseSessions = 0;
+  m.buitenKantoor = 0;
+  m.weekendConvos = 0;
+  m.monthlyTopics = {};
+  let botLengths = [];
+  let totalTurns = 0;
+  let minDate = 'Z', maxDate = '';
+
+  convos.forEach(c => {
+    // Date range
+    if (c.time && c.time < minDate) minDate = c.time;
+    if (c.time && c.time > maxDate) maxDate = c.time;
+
+    // Messages
+    c.messages.forEach(msg => {
+      m.totalMessages++;
+      if (msg.role === 'user') m.totalUserMessages++;
+      if (msg.role === 'bot') {
+        botLengths.push(msg.content.length);
+        if (!msg.content.trim()) m.emptyResponses++;
+      }
+    });
+
+    // Monthly
+    if (c.time) {
+      const mo = c.time.substring(0, 7);
+      m.monthly[mo] = (m.monthly[mo] || 0) + 1;
+
+      // Monthly topics
+      if (!m.monthlyTopics[mo]) m.monthlyTopics[mo] = {};
+      m.monthlyTopics[mo][c.topic] = (m.monthlyTopics[mo][c.topic] || 0) + 1;
+
+      // Hourly (CET = UTC+1, rough)
+      const hour = new Date(c.time).getUTCHours() + 1;
+      const cetHour = hour >= 24 ? hour - 24 : hour;
+      m.hourly[cetHour]++;
+
+      // Day of week
+      const d = new Date(c.time);
+      m.dow[d.getDay()]++;
+
+      // Buiten kantoortijden
+      if (cetHour < 8 || cetHour >= 18) m.buitenKantoor++;
+      if (d.getDay() === 0 || d.getDay() === 6) m.weekendConvos++;
+    }
+
+    // Topics
+    m.topicCounts[c.topic] = (m.topicCounts[c.topic] || 0) + 1;
+
+    // Turns
+    totalTurns += c.turns;
+    if (c.turns === 1) m.singleTurn++;
+    else m.multiTurn++;
+
+    if (c.turns <= 5) m.lengthDist[String(c.turns)]++;
+    else if (c.turns <= 10) m.lengthDist['6-10']++;
+    else m.lengthDist['11+']++;
+
+    if (c.turns >= 3) m.rephraseSessions++;
+
+    // Errors
+    if (c.hasError) m.errorConvos++;
+
+    // Feedback (text feedbacks)
+    if (c.feedbacks && c.feedbacks.length > 0) {
+      c.feedbacks.forEach(fb => {
+        m.feedbackCount++;
+        m.feedbacks.push({ feedback: fb, time: c.time, convId: c.id, isTester: c.isTester });
+      });
+    }
+
+    // Thumbs ratings (from Flowise exports — ground truth for BSAT)
+    if (c.thumbs) {
+      m.convosWithFeedback++;
+      if (c.thumbs.positive) m.thumbsPositive++;
+      if (c.thumbs.negative) m.thumbsNegative++;
+    }
+
+    // Tester count
+    if (c.isTester) m.testerCount = (m.testerCount || 0) + 1;
+  });
+
+  m.dateRange = { from: minDate === 'Z' ? null : minDate, to: maxDate || null };
+  m.avgTurns = convos.length > 0 ? (totalTurns / convos.length).toFixed(1) : '0';
+  m.errorRate = convos.length > 0 ? ((m.errorConvos / convos.length) * 100).toFixed(1) : '0';
+  m.buitenKantoorPct = convos.length > 0 ? ((m.buitenKantoor / convos.length) * 100).toFixed(1) : '0';
+  m.weekendPct = convos.length > 0 ? ((m.weekendConvos / convos.length) * 100).toFixed(1) : '0';
+  m.rephrasePct = convos.length > 0 ? ((m.rephraseSessions / convos.length) * 100).toFixed(1) : '0';
+  m.testerCount = m.testerCount || 0;
+
+  botLengths.sort((a, b) => a - b);
+  m.medianBotLength = botLengths.length > 0 ? botLengths[Math.floor(botLengths.length / 2)] : 0;
+  m.avgBotLength = botLengths.length > 0 ? Math.round(botLengths.reduce((a, b) => a + b, 0) / botLengths.length) : 0;
+
+  // BSAT computation — based on actual Flowise thumbs ratings
+  m.bsat = computeBSAT(convos);
+
+  return m;
+}
+
+function computeBSAT(convos) {
+  // Use actual thumbs-up/thumbs-down from Flowise exports (ground truth)
+  const all = convos.filter(c => c.thumbs);
+  const nonTester = all.filter(c => !c.isTester);
+
+  function calcScore(list) {
+    const pos = list.filter(c => c.thumbs.positive).length;
+    const neg = list.filter(c => c.thumbs.negative).length;
+    const total = list.length;
+    return { positive: pos, negative: neg, total: total,
+      score: total > 0 ? Math.round((pos / total) * 100) : null };
+  }
+
+  return { all: calcScore(all), corrected: calcScore(nonTester) };
+}
+
+function updateRangeLabel() {
+  const label = document.getElementById('active-range-label');
+  if (!globalDateFrom && !globalDateTo) {
+    label.textContent = '';
+    return;
+  }
+  const fmt = d => {
+    if (!d) return '';
+    const [y, m, day] = d.split('-');
+    return day + '-' + m + '-' + y;
+  };
+  const convos = getFilteredConvLog();
+  label.textContent = fmt(globalDateFrom || '') + ' t/m ' + fmt(globalDateTo || '') + ' (' + convos.length.toLocaleString('nl-NL') + ' gesprekken)';
+}
+
+function rebuildAll() {
+  updateRangeLabel();
+  const convos = getFilteredConvLog();
+  const m = computeMetrics(convos);
+  buildPO(m, convos);
+  buildCM(m, convos);
+  buildTech(m, convos);
+  buildLog(convos);
+}
+
+// ========== TABS ==========
+function initTabs() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+// ========== SECTION NAV (scroll spy) ==========
+function initSectionNav(tabId, navId) {
+  const nav = document.getElementById(navId);
+  if (!nav) return;
+  const links = nav.querySelectorAll('a[href^="#"]');
+  links.forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.getElementById(link.getAttribute('href').substring(1));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      links.forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+    });
+  });
+}
+
+// ========== NAVIGATE TO LOG (from chart click) ==========
+function navigateToLog(opts) {
+  // opts: { dateFrom, dateTo, topic, search }
+  // 1. Set date filter to custom range
+  if (opts.dateFrom && opts.dateTo) {
+    const presets = document.querySelectorAll('.preset-btn');
+    presets.forEach(b => b.classList.remove('active'));
+    document.querySelector('.preset-btn[data-preset="custom"]').classList.add('active');
+    const fromInput = document.getElementById('global-date-from');
+    const toInput = document.getElementById('global-date-to');
+    fromInput.style.display = '';
+    toInput.style.display = '';
+    document.getElementById('date-sep').style.display = '';
+    fromInput.value = opts.dateFrom;
+    toInput.value = opts.dateTo;
+    globalDateFrom = opts.dateFrom;
+    globalDateTo = opts.dateTo;
+  }
+
+  // 2. Switch to log tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab[data-tab="log"]').classList.add('active');
+  document.getElementById('tab-log').classList.add('active');
+
+  // 3. Rebuild everything with new date filter
+  rebuildAll();
+
+  // 4. Set log filters after rebuild
+  if (opts.topic) {
+    document.getElementById('log-topic').value = opts.topic;
+  }
+  if (opts.search) {
+    document.getElementById('log-search').value = opts.search;
+  }
+  // Trigger log filter re-apply
+  const convos = getFilteredConvLog();
+  applyLogFilters(convos);
+
+  // 5. Scroll to top
+  window.scrollTo(0, 0);
+}
+
+// Helper: get month date range from "YYYY-MM" or month label
+function monthToDateRange(monthKey) {
+  // monthKey like "2024-10"
+  const year = parseInt(monthKey.substring(0, 4));
+  const month = parseInt(monthKey.substring(5, 7));
+  const from = monthKey + '-01';
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = monthKey + '-' + String(lastDay).padStart(2, '0');
+  return { from, to };
+}
+
+// ========== INLINE EXPANDABLE ROW ==========
+// Clicking a conversation row expands it in place (an extra <tr> right below it) instead of a
+// popup, with the thread rendered by thread-view/ (a tiny @assistant-ui/react app — the same
+// primitives as the Robin widget and the va-dashboard agent-frontend) in an iframe.
+const expandedRows = new Set();
+
+function openConvo(idx) {
+  const row = document.querySelector('.log-table tr[data-idx="' + idx + '"]');
+  if (row) toggleRow(idx, row);
+}
+
+function toggleRow(idx, tr) {
+  const existing = tr.nextElementSibling;
+  if (existing && existing.classList.contains('conv-detail-row')) {
+    existing.remove();
+    expandedRows.delete(idx);
+    tr.classList.remove('expanded');
+    return;
+  }
+  // Collapse any other open row first (keeps the table from growing unbounded).
+  document.querySelectorAll('.conv-detail-row').forEach(r => r.remove());
+  document.querySelectorAll('.log-table tr.expanded').forEach(r => r.classList.remove('expanded'));
+  expandedRows.clear();
+
+  const c = DATA.convLog[idx];
+  if (!c) return;
+  const detailTr = document.createElement('tr');
+  detailTr.className = 'conv-detail-row';
+  const td = document.createElement('td');
+  td.colSpan = 8;
+  td.innerHTML =
+    '<div class="conv-detail">' +
+      '<div class="conv-detail-meta">' +
+        '<span>' + formatDate(c.time) + '</span> ' +
+        '<span class="badge">' + c.topic + '</span> ' +
+        '<span>' + c.turns + ' vraag/vragen</span>' +
+        (c.hasError ? ' <span class="badge err">Fout</span>' : '') +
+        (c.feedbacks && c.feedbacks.length ? ' <span class="badge fb">Feedback</span>' : '') +
+      '</div>' +
+      '<iframe class="conv-detail-frame" src="thread-view/dist/index.html?id=' + encodeURIComponent(c.id) + '" loading="lazy"></iframe>' +
+    '</div>';
+  detailTr.appendChild(td);
+  tr.after(detailTr);
+  tr.classList.add('expanded');
+  expandedRows.add(idx);
+  detailTr.scrollIntoView({ block: 'nearest' });
+}
+
+// ========== CHART HELPER ==========
+function makeChart(id, config) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+  charts[id] = new Chart(document.getElementById(id), config);
+}
+
+// ========== PRODUCT OWNER ==========
+function buildPO(m, convos) {
+  const months = Object.keys(m.monthly).sort();
+  const numMonths = months.length || 1;
+  const avgPerMonth = Math.round(m.totalConversations / numMonths);
+
+  // --- Overzicht ---
+  document.getElementById('po-kpis').innerHTML =
+    kpiCard(m.totalConversations.toLocaleString('nl-NL'), 'Totaal gesprekken', m.dateRange.from ? formatDate(m.dateRange.from) + ' – ' + formatDate(m.dateRange.to) : 'Geen data in deze periode') +
+    kpiCard(avgPerMonth.toLocaleString('nl-NL'), 'Gemiddeld per maand', numMonths + ' maanden actief') +
+    kpiCard(m.totalUserMessages.toLocaleString('nl-NL'), 'Totaal vragen', m.avgTurns + ' vragen/gesprek gemiddeld') +
+    kpiCard(m.convosWithFeedback.toLocaleString('nl-NL'), 'Beoordelingen', ((m.convosWithFeedback / m.totalConversations) * 100).toFixed(1) + '% van alle gesprekken');
+
+  // --- Effectiviteit ---
+  // Containment: conversations where user did NOT explicitly ask for a human/other channel
+  const escalationPatterns = [
+    /wil.*(een\s+)?(medewerker|persoon|mens)\s*spreken/i,
+    /kan ik.*(medewerker|persoon|iemand)\s*(spreken|praten|bellen)/i,
+    /liever.*(met een mens|persoonlijk|medewerker)/i,
+    /niet met een bot/i, /geen bot/i, /doorverbind/i,
+    /contact.*met.*(een\s+)?medewerker/i,
+    /spreken met (een )?medewerker/i,
+    /ik wil (een )?medewerker/i,
+    /ik wil iemand spreken/i,
+    /kan ik met een echt/i,
+  ];
+  const escalated = convos.filter(c => {
+    const msgs = c.messages ? c.messages.filter(msg => msg.role === 'user') : [];
+    return msgs.some(msg => escalationPatterns.some(p => p.test(msg.content)));
+  }).length;
+  const contained = m.totalConversations - escalated;
+  const containmentRate = m.totalConversations > 0 ? ((contained / m.totalConversations) * 100).toFixed(1) : '0';
+
+  // First-time resolution: resolved without rephrasing (< 3 turns)
+  const resolvedNoRephrase = m.totalConversations - m.rephraseSessions;
+  const ftrRate = m.totalConversations > 0 ? ((resolvedNoRephrase / m.totalConversations) * 100).toFixed(1) : '0';
+
+  // Task completion: only conversations with explicit positive feedback (thumbs up)
+  const taskCompleted = convos.filter(c => c.thumbs && c.thumbs.positive).length;
+  const taskCompletionRate = m.totalConversations > 0 ? ((taskCompleted / m.totalConversations) * 100).toFixed(1) : '0';
+
+  document.getElementById('effectiveness-info').innerHTML =
+    '<strong>Containment rate</strong>: % gesprekken waarin de gebruiker niet expliciet om een medewerker of ander kanaal vraagt. ' +
+    '<strong>First-time resolution</strong>: % gesprekken afgerond zonder herformulering (minder dan 3 vragen). ' +
+    '<strong>Task completion</strong>: % gesprekken met expliciete positieve beoordeling (👍) door de gebruiker. Alleen de gebruiker kan beoordelen of de taak volbracht is.';
+
+  document.getElementById('po-effectiveness').innerHTML =
+    kpiCard(containmentRate + '%', 'Containment rate', contained.toLocaleString('nl-NL') + ' van ' + m.totalConversations.toLocaleString('nl-NL') + ' (' + escalated + ' escalaties)', parseFloat(containmentRate) >= 95 ? 'green' : parseFloat(containmentRate) >= 85 ? 'yellow' : 'red') +
+    kpiCard(ftrRate + '%', 'First-time resolution', resolvedNoRephrase.toLocaleString('nl-NL') + ' van ' + m.totalConversations.toLocaleString('nl-NL') + ' gesprekken', parseFloat(ftrRate) >= 70 ? 'green' : parseFloat(ftrRate) >= 50 ? 'yellow' : 'red') +
+    kpiCard(taskCompletionRate + '%', 'Task completion', taskCompleted.toLocaleString('nl-NL') + ' van ' + m.totalConversations.toLocaleString('nl-NL') + ' gesprekken', parseFloat(taskCompletionRate) >= 60 ? 'green' : parseFloat(taskCompletionRate) >= 40 ? 'yellow' : 'red');
+
+  // --- Bereikbaarheid ---
+  document.getElementById('po-bereik-kpis').innerHTML =
+    kpiCard(m.buitenKantoorPct + '%', 'Buiten kantoortijden', m.buitenKantoor.toLocaleString('nl-NL') + ' gesprekken', 'green') +
+    kpiCard(m.weekendPct + '%', 'In het weekend', m.weekendConvos.toLocaleString('nl-NL') + ' gesprekken', 'green');
+
+  // --- BSAT ---
+  const b = m.bsat;
+  const bsatColor = s => s === null ? '' : s >= 80 ? 'green' : s >= 60 ? 'yellow' : 'red';
+  const responseRate = m.totalConversations > 0 ? ((m.convosWithFeedback / m.totalConversations) * 100).toFixed(1) : '0';
+  document.getElementById('po-bsat').innerHTML =
+    kpiCard(b.corrected.score !== null ? b.corrected.score + '%' : '\u2013', 'BSAT (excl. testers)', '\uD83D\uDC4D ' + b.corrected.positive + ' \u00b7 \uD83D\uDC4E ' + b.corrected.negative + ' \u00b7 n=' + b.corrected.total, bsatColor(b.corrected.score)) +
+    kpiCard(b.all.score !== null ? b.all.score + '%' : '\u2013', 'BSAT (incl. testers)', '\uD83D\uDC4D ' + b.all.positive + ' \u00b7 \uD83D\uDC4E ' + b.all.negative + ' \u00b7 n=' + b.all.total, bsatColor(b.all.score)) +
+    kpiCard(responseRate + '%', 'Feedbackrespons', m.convosWithFeedback + ' van ' + m.totalConversations.toLocaleString('nl-NL') + ' gesprekken');
+
+  document.getElementById('bsat-info-text').innerHTML =
+    'BSAT = (\uD83D\uDC4D positieve beoordelingen \u00f7 totaal beoordelingen) \u00d7 100. ' +
+    'Gebaseerd op duimpjes (thumbs up/down) uit Flowise. ' +
+    'Respons: ' + m.convosWithFeedback + ' van ' + m.totalConversations.toLocaleString('nl-NL') + ' gesprekken (' + responseRate + '%). ' +
+    'Daarvan hebben ' + m.feedbackCount + ' ook tekst-feedback achtergelaten. ' +
+    'Scores met en zonder ' + (m.testerCount || 0) + ' interne testgesprekken.';
+
+  // --- Topic performance table ---
+  const topicPerf = {};
+  convos.forEach(c => {
+    if (!topicPerf[c.topic]) topicPerf[c.topic] = { total: 0, single: 0, thumbsUp: 0, thumbsDown: 0, rated: 0 };
+    const tp = topicPerf[c.topic];
+    tp.total++;
+    if (c.turns === 1) tp.single++;
+    if (c.thumbs) {
+      tp.rated++;
+      if (c.thumbs.positive) tp.thumbsUp++;
+      if (c.thumbs.negative) tp.thumbsDown++;
+    }
+  });
+  const topicRows = Object.entries(topicPerf).sort((a, b) => b[1].total - a[1].total);
+  const maxTopicCount = topicRows.length > 0 ? topicRows[0][1].total : 1;
+
+  let tableHtml = '<table class="topic-table"><thead><tr><th>Onderwerp</th><th class="num">Gesprekken</th><th class="num">%</th><th class="num">Containment</th><th class="num">BSAT</th><th class="num">\uD83D\uDC4D</th><th class="num">\uD83D\uDC4E</th></tr></thead><tbody>';
+  topicRows.forEach(([topic, tp]) => {
+    const pct = m.totalConversations > 0 ? ((tp.total / m.totalConversations) * 100).toFixed(1) : '0';
+    const containment = tp.total > 0 ? ((tp.single / tp.total) * 100).toFixed(0) : '-';
+    const bsat = tp.rated > 0 ? ((tp.thumbsUp / tp.rated) * 100).toFixed(0) : '-';
+    const bsatClass = bsat === '-' ? '' : bsat >= 80 ? 'color:#10b981' : bsat >= 60 ? 'color:#f59e0b' : 'color:#ef4444';
+    const barWidth = ((tp.total / maxTopicCount) * 100).toFixed(0);
+    tableHtml += '<tr style="cursor:pointer" onclick="navigateToLog({topic:\'' + topic.replace(/'/g, "\\'") + '\'})">' +
+      '<td>' + topic + '</td>' +
+      '<td class="num">' + tp.total.toLocaleString('nl-NL') + '</td>' +
+      '<td class="num">' + pct + '%</td>' +
+      '<td class="num">' + containment + '%</td>' +
+      '<td class="num" style="font-weight:600;' + bsatClass + '">' + (bsat === '-' ? '\u2013' : bsat + '%') + '</td>' +
+      '<td class="num">' + tp.thumbsUp + '</td>' +
+      '<td class="num">' + tp.thumbsDown + '</td>' +
+      '</tr>';
+  });
+  tableHtml += '</tbody></table>';
+  document.getElementById('po-topic-table').innerHTML = tableHtml;
+
+  // --- Charts (clickable → navigate to log) ---
+  const clickableCursor = { id: 'clickableCursor', afterEvent(chart, args) {
+    const evt = args.event;
+    if (evt.type === 'mousemove') {
+      const els = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
+      chart.canvas.style.cursor = els.length ? 'pointer' : 'default';
+    }
+  }};
+
+  makeChart('chart-monthly', {
+    type: 'bar',
+    data: { labels: months.map(formatMonth), datasets: [{ label: 'Gesprekken', data: months.map(mo => m.monthly[mo]), backgroundColor: '#2563eb', borderRadius: 6 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } },
+      onClick: (evt, els) => {
+        if (els.length > 0) {
+          const idx = els[0].index;
+          const range = monthToDateRange(months[idx]);
+          navigateToLog({ dateFrom: range.from, dateTo: range.to });
+        }
+      }
+    },
+    plugins: [clickableCursor]
+  });
+
+  const topicEntries = Object.entries(m.topicCounts).filter(([k]) => k !== 'Overig').sort((a, b) => b[1] - a[1]);
+  makeChart('chart-topics', {
+    type: 'bar',
+    data: { labels: topicEntries.map(([k]) => k), datasets: [{ data: topicEntries.map(([, v]) => v), backgroundColor: topicEntries.map((_, i) => `hsl(${210 + i * 20}, 70%, ${50 + (i % 3) * 10}%)`), borderRadius: 6 }] },
+    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } },
+      onClick: (evt, els) => {
+        if (els.length > 0) {
+          const idx = els[0].index;
+          const topic = topicEntries[idx][0];
+          navigateToLog({ topic: topic });
+        }
+      }
+    },
+    plugins: [clickableCursor]
+  });
+
+  const hourLabels = Array.from({ length: 24 }, (_, i) => i + ':00');
+  makeChart('chart-hourly', {
+    type: 'bar',
+    data: { labels: hourLabels, datasets: [{ label: 'Gesprekken', data: m.hourly, backgroundColor: m.hourly.map((_, i) => (i >= 8 && i < 18) ? '#2563eb' : '#10b981'), borderRadius: 4 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  makeChart('chart-dow', {
+    type: 'bar',
+    data: { labels: m.dowLabels, datasets: [{ data: m.dow, backgroundColor: m.dow.map((_, i) => (i === 0 || i === 6) ? '#10b981' : '#2563eb'), borderRadius: 6 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  makeChart('chart-turns', {
+    type: 'doughnut',
+    data: { labels: ['Single-turn (1 vraag)', 'Multi-turn (2+ vragen)'], datasets: [{ data: [m.singleTurn, m.multiTurn], backgroundColor: ['#2563eb', '#10b981'] }] },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+  });
+
+  // --- Sidebar scroll spy ---
+  initSectionNav('tab-po', 'po-nav');
+}
+
+// ========== CONTENTMANAGER ==========
+function buildCM(m, convos) {
+  document.getElementById('cm-kpis').innerHTML =
+    kpiCard(m.feedbackCount, 'Feedbackberichten', 'Van gebruikers ontvangen') +
+    kpiCard(m.rephrasePct + '%', 'Sessies met 3+ vragen', m.rephraseSessions + ' gesprekken — mogelijk herformulering', 'yellow') +
+    kpiCard((m.topicCounts['Overig'] || 0).toLocaleString('nl-NL'), '"Overig" gesprekken', 'Niet geclassificeerd — mogelijk content gaps', 'yellow') +
+    kpiCard(m.emptyResponses, 'Lege bot-antwoorden', 'Foutieve responses zonder inhoud', 'red');
+
+  const ld = m.lengthDist;
+  makeChart('chart-convlength', {
+    type: 'bar',
+    data: { labels: Object.keys(ld).map(k => k + (k === '1' ? ' vraag' : ' vragen')), datasets: [{ data: Object.values(ld), backgroundColor: Object.keys(ld).map((_, i) => i <= 1 ? '#2563eb' : i <= 3 ? '#f59e0b' : '#ef4444'), borderRadius: 6 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  const topicAll = Object.entries(m.topicCounts).sort((a, b) => b[1] - a[1]);
+  makeChart('chart-topics-cm', {
+    type: 'bar',
+    data: { labels: topicAll.map(([k]) => k), datasets: [{ data: topicAll.map(([, v]) => v), backgroundColor: topicAll.map(([k]) => k === 'Overig' ? '#ef4444' : '#2563eb'), borderRadius: 6 }] },
+    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+  });
+
+  const months = Object.keys(m.monthlyTopics).sort();
+  const topTopics = Object.entries(m.topicCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k]) => k);
+  const trendColors = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+  makeChart('chart-topics-trend', {
+    type: 'line',
+    data: {
+      labels: months.map(formatMonth),
+      datasets: topTopics.map((topic, i) => ({
+        label: topic, data: months.map(mo => (m.monthlyTopics[mo] || {})[topic] || 0),
+        borderColor: trendColors[i], backgroundColor: trendColors[i] + '20', fill: false, tension: 0.3, pointRadius: 3
+      }))
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  // Feedback table
+  document.getElementById('fb-count').textContent = m.feedbackCount;
+  const tbody = document.querySelector('#feedback-table tbody');
+  tbody.innerHTML = '';
+  m.feedbacks.forEach(fb => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + formatDate(fb.time) + '</td><td>' + escapeHtml(fb.feedback) + '</td><td><button onclick="openConvoById(\'' + fb.convId + '\')">Bekijk</button></td>';
+    tbody.appendChild(tr);
+  });
+
+  // Error convos
+  const errorTbody = document.getElementById('error-tbody');
+  errorTbody.innerHTML = '';
+  convos.forEach(c => {
+    if (!c.hasError) return;
+    const idx = DATA.convLog.indexOf(c);
+    const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.innerHTML = '<td class="td-date">' + formatDateShort(c.time) + '</td><td class="td-topic"><span class="badge">' + c.topic + '</span></td><td>' + escapeHtml(c.preview) + '</td>';
+    tr.addEventListener('click', () => openConvo(idx));
+    errorTbody.appendChild(tr);
+  });
+}
+
+// ========== TECHNISCH BEHEER ==========
+function buildTech(m, convos) {
+  document.getElementById('tech-kpis').innerHTML =
+    kpiCard(m.totalMessages.toLocaleString('nl-NL'), 'Totaal berichten', m.totalUserMessages + ' user + ' + (m.totalMessages - m.totalUserMessages) + ' bot') +
+    kpiCard(m.errorRate + '%', 'Error rate', m.emptyResponses + ' lege responses', parseFloat(m.errorRate) > 5 ? 'red' : parseFloat(m.errorRate) > 2 ? 'yellow' : 'green') +
+    kpiCard(m.medianBotLength, 'Mediaan antwoordlengte', 'karakters per bot-response') +
+    kpiCard(m.avgBotLength, 'Gem. antwoordlengte', 'karakters per bot-response') +
+    kpiCard(m.avgTurns, 'Gem. vragen per sessie', '');
+
+  const hourLabels = Array.from({ length: 24 }, (_, i) => i + ':00');
+  makeChart('chart-hourly-tech', {
+    type: 'line',
+    data: { labels: hourLabels, datasets: [{ label: 'Gesprekken', data: m.hourly, borderColor: '#2563eb', backgroundColor: '#2563eb20', fill: true, tension: 0.3 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  const months = Object.keys(m.monthly).sort();
+  const errorsMonthly = {};
+  convos.forEach(c => {
+    if (!c.hasError || !c.time) return;
+    const mo = c.time.substring(0, 7);
+    errorsMonthly[mo] = (errorsMonthly[mo] || 0) + 1;
+  });
+  makeChart('chart-errors-monthly', {
+    type: 'bar',
+    data: { labels: months.map(formatMonth), datasets: [{ label: 'Fouten', data: months.map(mo => errorsMonthly[mo] || 0), backgroundColor: '#ef4444', borderRadius: 6 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  const lengthBuckets = { '0-100': 0, '100-300': 0, '300-500': 0, '500-1000': 0, '1000-2000': 0, '2000+': 0 };
+  convos.forEach(c => {
+    c.messages.forEach(msg => {
+      if (msg.role !== 'bot') return;
+      const l = msg.content.length;
+      if (l < 100) lengthBuckets['0-100']++;
+      else if (l < 300) lengthBuckets['100-300']++;
+      else if (l < 500) lengthBuckets['300-500']++;
+      else if (l < 1000) lengthBuckets['500-1000']++;
+      else if (l < 2000) lengthBuckets['1000-2000']++;
+      else lengthBuckets['2000+']++;
+    });
+  });
+  makeChart('chart-response-length', {
+    type: 'bar',
+    data: { labels: Object.keys(lengthBuckets).map(k => k + ' tekens'), datasets: [{ data: Object.values(lengthBuckets), backgroundColor: '#8b5cf6', borderRadius: 6 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  makeChart('chart-monthly-tech', {
+    type: 'line',
+    data: { labels: months.map(formatMonth), datasets: [{ label: 'Gesprekken', data: months.map(mo => m.monthly[mo]), borderColor: '#2563eb', backgroundColor: '#2563eb20', fill: true, tension: 0.3 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+// ========== GESPREKSLOGBOEK ==========
+function buildLog(convos) {
+  document.getElementById('total-convos-log').textContent = convos.length.toLocaleString('nl-NL');
+
+  // Populate topic dropdown
+  const topicSelect = document.getElementById('log-topic');
+  const prevTopic = topicSelect.value;
+  topicSelect.innerHTML = '<option value="">Alle onderwerpen</option>';
+  const topics = [...new Set(convos.map(c => c.topic))].sort();
+  topics.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t; opt.textContent = t;
+    if (t === prevTopic) opt.selected = true;
+    topicSelect.appendChild(opt);
+  });
+
+  // Remove old listeners by cloning
+  ['log-search', 'log-topic', 'log-errors-only', 'log-feedback-only'].forEach(id => {
+    const el = document.getElementById(id);
+    const clone = el.cloneNode(true);
+    el.parentNode.replaceChild(clone, el);
+  });
+
+  // Re-attach listeners
+  ['log-search', 'log-topic', 'log-errors-only', 'log-feedback-only'].forEach(id => {
+    document.getElementById(id).addEventListener(id === 'log-search' ? 'input' : 'change', () => {
+      currentPage = 0;
+      applyLogFilters(convos);
+    });
+  });
+
+  // Select-all
+  const selAllEl = document.getElementById('select-all');
+  const selClone = selAllEl.cloneNode(true);
+  selAllEl.parentNode.replaceChild(selClone, selAllEl);
+  document.getElementById('select-all').addEventListener('change', e => {
+    const start = currentPage * PAGE_SIZE;
+    const end = Math.min(start + PAGE_SIZE, filteredConvos.length);
+    for (let i = start; i < end; i++) {
+      const idx = filteredConvos[i];
+      if (e.target.checked) selectedConvos.add(idx);
+      else selectedConvos.delete(idx);
+    }
+    renderPage();
+    updateSelectionBar();
+  });
+
+  currentPage = 0;
+  applyLogFilters(convos);
+}
+
+function applyLogFilters(convos) {
+  const search = document.getElementById('log-search').value.toLowerCase();
+  const topic = document.getElementById('log-topic').value;
+  const errorsOnly = document.getElementById('log-errors-only').checked;
+  const feedbackOnly = document.getElementById('log-feedback-only').checked;
+
+  filteredConvos = [];
+  convos.forEach(c => {
+    const idx = DATA.convLog.indexOf(c);
+    if (topic && c.topic !== topic) return;
+    if (errorsOnly && !c.hasError) return;
+    if (feedbackOnly && (!c.feedbacks || !c.feedbacks.length)) return;
+    if (search) {
+      const allText = c.messages.map(msg => msg.content).join(' ').toLowerCase();
+      if (!allText.includes(search) && !c.preview.toLowerCase().includes(search)) return;
+    }
+    filteredConvos.push(idx);
+  });
+
+  filteredConvos.sort((a, b) => {
+    const ta = DATA.convLog[a].time || '';
+    const tb = DATA.convLog[b].time || '';
+    return tb.localeCompare(ta);
+  });
+
+  document.getElementById('log-count').textContent = filteredConvos.length.toLocaleString('nl-NL') + ' gesprekken gevonden';
+  renderPage();
+}
+
+function toggleSelection(idx, checked, tr) {
+  if (checked) { selectedConvos.add(idx); tr.classList.add('selected'); }
+  else { selectedConvos.delete(idx); tr.classList.remove('selected'); }
+  const start = currentPage * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, filteredConvos.length);
+  const pageIdxs = filteredConvos.slice(start, end);
+  const selAll = document.getElementById('select-all');
+  selAll.checked = pageIdxs.every(i => selectedConvos.has(i));
+  selAll.indeterminate = !selAll.checked && pageIdxs.some(i => selectedConvos.has(i));
+  updateSelectionBar();
+}
+
+function updateSelectionBar() {
+  const bar = document.getElementById('selection-bar');
+  const count = selectedConvos.size;
+  if (count === 0) { bar.classList.remove('visible'); return; }
+  bar.classList.add('visible');
+  document.getElementById('sel-count').textContent = count;
+  const topics = {};
+  let totalTurns = 0, errors = 0;
+  selectedConvos.forEach(idx => {
+    const c = DATA.convLog[idx];
+    topics[c.topic] = (topics[c.topic] || 0) + 1;
+    totalTurns += c.turns;
+    if (c.hasError) errors++;
+  });
+  document.getElementById('sel-topics').textContent = Object.entries(topics).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => k + ': ' + v).join(', ');
+  document.getElementById('sel-turns').textContent = 'Gem. ' + (totalTurns / count).toFixed(1) + ' vragen';
+  document.getElementById('sel-errors').textContent = errors + ' fouten';
+}
+
+function clearSelection() { selectedConvos.clear(); updateSelectionBar(); renderPage(); }
+
+function exportSelection() {
+  if (selectedConvos.size === 0) return;
+  let csv = 'Datum,Onderwerp,Vragen,Eerste vraag,Fout,Feedback\n';
+  selectedConvos.forEach(idx => {
+    const c = DATA.convLog[idx];
+    csv += '"' + formatDateShort(c.time) + '","' + c.topic + '",' + c.turns + ',"' +
+      c.preview.replace(/"/g, '""') + '",' + (c.hasError ? 'Ja' : 'Nee') + ',"' +
+      ((c.feedbacks || []).join('; ')).replace(/"/g, '""') + '"\n';
+  });
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'robin-selectie-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+}
+
+function renderPage() {
+  const tbody = document.getElementById('conv-tbody');
+  tbody.innerHTML = '';
+  const start = currentPage * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, filteredConvos.length);
+
+  for (let i = start; i < end; i++) {
+    const idx = filteredConvos[i];
+    const c = DATA.convLog[idx];
+    const tr = document.createElement('tr');
+    tr.dataset.idx = idx;
+    tr.className = (c.hasError ? 'error ' : '') + (c.feedbacks && c.feedbacks.length ? 'has-feedback ' : '') + (selectedConvos.has(idx) ? 'selected' : '');
+    tr.innerHTML =
+      '<td class="td-check"><input type="checkbox" data-idx="' + idx + '"' + (selectedConvos.has(idx) ? ' checked' : '') + '></td>' +
+      '<td class="td-status"><span class="status-dot" style="background:' + topicColor(c.topic) + '" title="' + escapeHtml(c.topic) + '"></span></td>' +
+      '<td class="td-date">' + formatDateShort(c.time) + '</td>' +
+      '<td class="td-topic"><span class="topic-dot" style="background:' + topicColor(c.topic) + '"></span>' + escapeHtml(c.topic) + '</td>' +
+      '<td class="td-turns">' + c.turns + '</td>' +
+      '<td class="td-preview">' + escapeHtml(c.preview) + '</td>' +
+      '<td class="td-fout">' + (c.hasError ? '<span class="badge err">Fout</span>' : '<span class="dash">–</span>') + '</td>' +
+      '<td class="td-feedback">' + (c.feedbacks && c.feedbacks.length ? '<span class="badge fb">' + c.feedbacks.length + '</span>' : '<span class="dash">–</span>') + '</td>';
+    tr.querySelector('input[type=checkbox]').addEventListener('click', e => {
+      e.stopPropagation();
+      toggleSelection(idx, e.target.checked, tr);
+    });
+    tr.addEventListener('click', e => {
+      if (e.target.tagName === 'INPUT') return;
+      toggleRow(idx, tr);
+    });
+    tbody.appendChild(tr);
+  }
+
+  const selAll = document.getElementById('select-all');
+  const pageIdxs = filteredConvos.slice(start, end);
+  selAll.checked = pageIdxs.length > 0 && pageIdxs.every(i => selectedConvos.has(i));
+  selAll.indeterminate = !selAll.checked && pageIdxs.some(i => selectedConvos.has(i));
+
+  const totalPages = Math.ceil(filteredConvos.length / PAGE_SIZE);
+  const pag = document.getElementById('pagination');
+  pag.innerHTML = '';
+  if (totalPages <= 1) return;
+  if (currentPage > 0) { const btn = document.createElement('button'); btn.textContent = 'Vorige'; btn.addEventListener('click', () => { currentPage--; renderPage(); document.querySelector('.log-table-wrap').scrollTop = 0; }); pag.appendChild(btn); }
+  const span = document.createElement('span');
+  span.textContent = 'Pagina ' + (currentPage + 1) + ' van ' + totalPages;
+  pag.appendChild(span);
+  if (currentPage < totalPages - 1) { const btn = document.createElement('button'); btn.textContent = 'Volgende'; btn.addEventListener('click', () => { currentPage++; renderPage(); document.querySelector('.log-table-wrap').scrollTop = 0; }); pag.appendChild(btn); }
+}
+
+// ========== HELPERS ==========
+const TOPIC_COLORS = {};
+const TOPIC_PALETTE = ['#2563eb', '#dc2626', '#d97706', '#db2777', '#059669', '#7c3aed', '#0891b2', '#65a30d', '#9333ea', '#e11d48'];
+function topicColor(topic) {
+  if (!(topic in TOPIC_COLORS)) {
+    TOPIC_COLORS[topic] = TOPIC_PALETTE[Object.keys(TOPIC_COLORS).length % TOPIC_PALETTE.length];
+  }
+  return TOPIC_COLORS[topic];
+}
+function formatDateShort(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getFullYear()).slice(2) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function openConvoById(id) { const idx = DATA.convLog.findIndex(c => c.id === id); if (idx >= 0) openConvo(idx); }
+function kpiCard(value, label, sub, color) {
+  return '<div class="kpi-card ' + (color || '') + '"><div class="kpi-value">' + value + '</div><div class="kpi-label">' + label + '</div>' + (sub ? '<div class="kpi-sub">' + sub + '</div>' : '') + '</div>';
+}
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function formatMonth(ym) {
+  const [y, m] = ym.split('-');
+  return ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'][parseInt(m) - 1] + ' ' + y;
+}
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

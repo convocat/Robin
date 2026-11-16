@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Robin conversation</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: -apple-system, "Segoe UI", Arial, sans-serif; font-size: 14px; color: #0f172a; background: #f8fafc; }
+      .state { padding: 24px; color: #64748b; }
+      .state--error { color: #b91c1c; }
+      .layout { display: grid; grid-template-columns: 1fr 300px; height: 100%; min-height: 100vh; align-items: start; }
+      .thread__viewport { padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+      .msg { display: flex; gap: 10px; max-width: 100%; }
+      .msg--user { justify-content: flex-end; }
+      .msg--robin { justify-content: flex-start; }
+      .avatar { flex: none; width: 26px; height: 26px; border-radius: 9999px; background: #ec4899; color: #fff; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+      .bubble { max-width: 85%; padding: 10px 14px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; font-size: 0.875rem; line-height: 1.45; }
+      .bubble--user { background: #e0ecff; color: #1e3a8a; border-bottom-right-radius: 4px; }
+      .bubble--robin { background: #f1f5f9; color: #0f172a; border-bottom-left-radius: 4px; }
+      .msg__body { display: flex; flex-direction: column; gap: 6px; max-width: 85%; }
+
+      /* ===== Right panel: Bronnen + Beoordeling, matching the Waddinxveen dashboard ===== */
+      .review-panel { border-left: 1px solid #e2e8f0; background: #fff; padding: 12px 14px; height: 100vh;
+        overflow-y: auto; position: sticky; top: 0; font-size: 0.8125rem; }
+      .review-panel__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+      .trace-link { font-size: 0.75rem; color: #64748b; text-decoration: none; font-family: ui-monospace, monospace; }
+      .trace-link:hover { text-decoration: underline; }
+      .thumb { font-size: 0.9rem; }
+      .review-panel__title { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.05em; color: #64748b; margin: 14px 0 8px; }
+      .review-panel__empty { color: #94a3b8; font-size: 0.75rem; font-style: italic; }
+      .source-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+      .source-card { border-radius: 8px; padding: 8px 10px; border: 1px solid transparent; }
+      .source-card--good { background: #f0fdf4; border-color: #bbf7d0; }
+      .source-card--weak { background: #fff7ed; border-color: #fed7aa; }
+      .source-card__head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+      .source-card__title { font-weight: 600; font-size: 0.8125rem; color: #0f172a; }
+      .source-card__score { font-family: ui-monospace, monospace; font-size: 0.6875rem; opacity: 0.7; flex: none; }
+      .source-card__snippet { margin: 4px 0 0; color: #475569; font-size: 0.75rem; line-height: 1.4; }
+      .ok-button { width: 100%; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; font-size: 0.8125rem; font-weight: 600; }
+      .ok-button--active { background: #dcfce7; border-color: #86efac; color: #15803d; }
+      .review-group { margin-top: 12px; }
+      .review-group h4 { margin: 0 0 6px; font-size: 0.75rem; color: #334155; }
+      .toggle-row { display: flex; flex-wrap: wrap; gap: 6px; }
+      .toggle-chip { border: 1px solid #cbd5e1; background: #fff; border-radius: 9999px; padding: 4px 10px; font-size: 0.6875rem; cursor: pointer; color: #334155; }
+      .toggle-chip--active { background: #dbeafe; border-color: #93c5fd; color: #1e40af; }
+      .review-note { width: 100%; min-height: 60px; border-radius: 6px; border: 1px solid #cbd5e1; padding: 6px 8px; font: inherit; font-size: 0.75rem; resize: vertical; }
+      .review-note__caveat { margin: 4px 0 0; font-size: 0.6875rem; color: #94a3b8; font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -28,6 +28,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+for stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252, which can't print emoji
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8")
+
 from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(ROOT / ".env")
@@ -36,6 +40,7 @@ os.environ.setdefault("LANGFUSE_TRACING_ENVIRONMENT", "experiment")  # keeps run
 from langfuse import get_client  # noqa: E402
 from langfuse.experiment import Evaluation  # noqa: E402
 
+import lookup  # noqa: E402
 import prompts  # noqa: E402
 import robin  # noqa: E402
 
@@ -162,12 +167,13 @@ def parse_guardrails(value: str) -> dict[str, bool]:
 
 
 def make_task(client, model_label: str, effort: str, guardrails: dict[str, bool], run_name: str,
-              user: str = "experiment"):
+              user: str = "experiment", look_up: bool = False, max_results: int = lookup.DEFAULT_MAX_RESULTS):
     def task(*, item, **_):
         data = item.input if hasattr(item, "input") else item["input"]
         result = robin.handle_turn(
             data["message"], data.get("history") or [], client=client, robin_model_label=model_label,
             reasoning_effort=effort, participant=user, session_id=run_name, guardrails=guardrails,
+            look_up=look_up, max_results=max_results,
         )
         return result.answer
     return task
@@ -186,6 +192,10 @@ def main() -> None:
     parser.add_argument("--guardrails", default="on",
                         help="on, off, or a list such as injection,facts (bank_account, injection, facts)")
     parser.add_argument("--user", default="experiment", help="the user name shown in Langfuse")
+    parser.add_argument("--look-up", action="store_true",
+                        help="search the content database (RAG) instead of using the return policy alone")
+    parser.add_argument("--max-results", type=int, default=lookup.DEFAULT_MAX_RESULTS, choices=lookup.MAX_RESULTS_CHOICES,
+                        help="chunks per question when --look-up is on (1, 3 or 5; default 3)")
     parser.add_argument("--local-checks", action="store_true",
                         help="also score the four form checks here (leave off when they run as a Langfuse evaluator)")
     parser.add_argument("--concurrency", type=int, default=4, help="items run at the same time")
@@ -200,7 +210,8 @@ def main() -> None:
     guardrails = parse_guardrails(args.guardrails)
     model_id = robin.ROBIN_MODELS[args.model]
     effort = args.effort if model_id in robin.REASONING_MODELS else "not used"
-    run_name = f"{args.model} · effort {effort} · guardrails {guardrail_label(guardrails)}"
+    look_up_label = f"look-up on, max {args.max_results}" if args.look_up else "look-up off"
+    run_name = f"{args.model} · effort {effort} · guardrails {guardrail_label(guardrails)} · {look_up_label}"
 
     langfuse = get_client()
     try:
@@ -210,11 +221,12 @@ def main() -> None:
         dataset = langfuse.get_dataset(DATASET)
     result = dataset.run_experiment(
         name="Robin", run_name=run_name,
-        description=f"Robin on {model_id}, guardrails {guardrail_label(guardrails)}",
-        task=make_task(OpenAI(), args.model, args.effort, guardrails, run_name, args.user),
+        description=f"Robin on {model_id}, guardrails {guardrail_label(guardrails)}, {look_up_label}",
+        task=make_task(OpenAI(), args.model, args.effort, guardrails, run_name, args.user,
+                        args.look_up, args.max_results),
         evaluators=EVALUATORS if args.local_checks else [], max_concurrency=args.concurrency,
         metadata={"model": model_id, "reasoning_effort": effort, "guardrails": guardrail_label(guardrails),
-                  "started_by": args.user},
+                  "started_by": args.user, "look_up": args.look_up, "max_results": args.max_results},
     )
     langfuse.flush()
     print(result.format())
